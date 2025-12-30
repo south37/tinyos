@@ -10,15 +10,9 @@ SECTIONS
 
 	PROVIDE(begin = .);
 
-    .multiboot : AT(mboot_load_addr)
+    .text : AT(mboot_load_addr)
     {
-        KEEP(*(.text.entry_header))
-    }
-
-    . = ALIGN(0x1000);
-
-    .text :
-    {
+        KEEP(*(.text.mboot_header))
         KEEP(*(.text.entry))
         *(.text*)
     }
@@ -56,4 +50,4 @@ mboot_flags = 0x00010000;
 mboot_checksum = 0xE4514FFE; /* -mboot_magic -mboot_flags */
 mboot_load_end = mboot_load_addr + (edata - begin);
 mboot_bss_end = mboot_load_addr + (end - begin);
-mboot_entry_addr = mboot_load_addr + (mboot_entry - begin);
+mboot_entry_addr = mboot_load_addr + (entry - begin);

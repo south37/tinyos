@@ -1,7 +1,7 @@
 # Entry point of kernel. Start as a 32-bit protected mode, and 
 # switches to 64-bit long mode, then jump to main.
 
-.section .text.entry_header
+.section .text.mboot_header
 .global mboot_header
 mboot_header:
     .long mboot_magic
@@ -46,8 +46,8 @@ mboot_header:
 # Entry point of kernel
 .code32
 .section .text.entry
-.global mboot_entry
-mboot_entry:
+.global entry
+entry:
     # zero 4 pages for our bootstrap page tables
     xor    %eax, %eax
     mov    $PAGETABLE, %edi
