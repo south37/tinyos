@@ -1,7 +1,7 @@
 # Entry point of kernel. Start as a 32-bit protected mode, and 
 # switches to 64-bit long mode, then jump to main.
 
-.section .text.mboot_header
+.section .multiboot
 .global mboot_header
 mboot_header:
     .long mboot_magic

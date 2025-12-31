@@ -12,7 +12,7 @@ SECTIONS
 
     .text : AT(mboot_load_addr)
     {
-        KEEP(*(.text.mboot_header))
+        KEEP(*(.multiboot))
         KEEP(*(.text.entry))
         *(.text*)
     }
