@@ -8,7 +8,7 @@ SECTIONS
 	/* Must be equal to KERNLINK */
 	. = 0xFFFFFFFF80100000; 
 
-	PROVIDE(begin = .);
+	PROVIDE(__kernel_start = .);
 
     .text : AT(mboot_load_addr)
     {
@@ -40,7 +40,7 @@ SECTIONS
     }
 
     . = ALIGN(0x1000);
-    PROVIDE(end = .);
+    PROVIDE(__kernel_end = .);
 }
 
 /* Multiboot header information */
@@ -49,6 +49,6 @@ mboot_magic = 0x1BADB002;
 /* Flags: bit 16 = address fields present */
 mboot_flags = 0x00010000;
 mboot_checksum = 0xE4514FFE; /* -mboot_magic -mboot_flags */
-mboot_load_end = mboot_load_addr + (edata - begin);
-mboot_bss_end = mboot_load_addr + (end - begin);
-mboot_entry_addr = mboot_load_addr + (entry - begin);
+mboot_load_end = mboot_load_addr + (edata - __kernel_start);
+mboot_bss_end = mboot_load_addr + (__kernel_end - __kernel_start);
+mboot_entry_addr = mboot_load_addr + (entry - __kernel_start);
