@@ -1,52 +1,7 @@
 use crate::allocator::Allocator;
 use crate::{PG_SIZE, p2v, v2p};
 
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct PageTableEntry(u64);
-
-impl PageTableEntry {
-    pub const PRESENT: u64 = 1 << 0;
-    pub const WRITABLE: u64 = 1 << 1;
-    pub const USER: u64 = 1 << 2;
-    pub const WRITE_THROUGH: u64 = 1 << 3;
-    pub const CACHE_DISABLE: u64 = 1 << 4;
-    pub const ACCESSED: u64 = 1 << 5;
-    pub const DIRTY: u64 = 1 << 6;
-    pub const HUGE_PAGE: u64 = 1 << 7;
-    pub const GLOBAL: u64 = 1 << 8;
-    pub const NO_EXECUTE: u64 = 1 << 63;
-
-    pub fn new(addr: u64, flags: u64) -> Self {
-        Self((addr & 0x000f_ffff_ffff_f000) | flags)
-    }
-
-    pub fn addr(&self) -> u64 {
-        self.0 & 0x000f_ffff_ffff_f000
-    }
-
-    pub fn flags(&self) -> u64 {
-        self.0 & 0xfff
-    }
-
-    pub fn is_present(&self) -> bool {
-        self.0 & Self::PRESENT != 0
-    }
-}
-
-#[repr(C, align(4096))]
-pub struct PageTable {
-    pub entries: [PageTableEntry; 512],
-}
-
-impl PageTable {
-    pub fn new() -> Self {
-        Self {
-            entries: [PageTableEntry(0); 512],
-        }
-    }
-}
-
+// Virtual memory
 pub struct Kvm {
     root: *mut PageTable,
 }
@@ -59,7 +14,7 @@ impl Kvm {
     }
 
     pub fn init(&mut self, allocator: &mut Allocator) {
-        self.root = allocator.alloc() as *mut PageTable;
+        self.root = allocator.kalloc() as *mut PageTable;
     }
 
     pub fn map(&mut self, allocator: &mut Allocator, va: u64, pa: u64, sz: u64, perm: u64) -> bool {
@@ -104,11 +59,10 @@ impl Kvm {
                 if !alloc {
                     return None;
                 }
-                let new_table = allocator.alloc() as *mut PageTable;
+                let new_table = allocator.kalloc() as *mut PageTable;
                 if new_table.is_null() {
                     return None;
                 }
-                // Zero out new table (allocator already allows this? allocator.alloc clears memory? yes)
                 let pa = v2p(new_table as usize) as u64;
                 *pte = PageTableEntry::new(
                     pa,
@@ -126,6 +80,44 @@ impl Kvm {
         unsafe {
             core::arch::asm!("mov cr3, {}", in(reg) v2p(self.root as usize));
         }
+    }
+}
+
+#[repr(C, align(4096))]
+pub struct PageTable {
+    pub entries: [PageTableEntry; 512],
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct PageTableEntry(u64);
+
+impl PageTableEntry {
+    pub const PRESENT: u64 = 1 << 0;
+    pub const WRITABLE: u64 = 1 << 1;
+    pub const USER: u64 = 1 << 2;
+    pub const WRITE_THROUGH: u64 = 1 << 3;
+    pub const CACHE_DISABLE: u64 = 1 << 4;
+    pub const ACCESSED: u64 = 1 << 5;
+    pub const DIRTY: u64 = 1 << 6;
+    pub const HUGE_PAGE: u64 = 1 << 7;
+    pub const GLOBAL: u64 = 1 << 8;
+    pub const NO_EXECUTE: u64 = 1 << 63;
+
+    pub fn new(addr: u64, flags: u64) -> Self {
+        Self((addr & 0x000f_ffff_ffff_f000) | flags)
+    }
+
+    pub fn addr(&self) -> u64 {
+        self.0 & 0x000f_ffff_ffff_f000
+    }
+
+    pub fn flags(&self) -> u64 {
+        self.0 & 0xfff
+    }
+
+    pub fn is_present(&self) -> bool {
+        self.0 & Self::PRESENT != 0
     }
 }
 

@@ -94,3 +94,8 @@ fn panic(info: &PanicInfo) -> ! {
     uart_println!("panicked: {}", info.message());
     loop {}
 }
+
+fn panic_loop(message: &str) -> ! {
+    uart_println!("panicked: {}", message);
+    loop {}
+}

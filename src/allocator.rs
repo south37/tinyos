@@ -32,15 +32,15 @@ impl Allocator {
         self.freelist = run;
     }
 
-    pub fn alloc(&mut self) -> *mut u8 {
+    pub fn kalloc(&mut self) -> *mut u8 {
         let run = self.freelist;
         if run.is_null() {
             return core::ptr::null_mut();
         }
         unsafe {
             self.freelist = (*run).next;
-            // Clear the memory
-            core::ptr::write_bytes(run as *mut u8, 0, PG_SIZE);
+            // Zero out run
+            core::ptr::write_bytes(run as *mut u8, 0u8, PG_SIZE);
         }
         run as *mut u8
     }
