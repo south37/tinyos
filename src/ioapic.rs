@@ -11,8 +11,8 @@ const REG_TABLE: u32 = 0x10;
 const IOREGSEL: usize = 0x00;
 const IOWIN: usize = 0x10;
 
-pub fn init() {
-    let ioapic_addr = crate::DEVBASE + (crate::IOAPIC - crate::DEVSPACE);
+pub unsafe fn init() {
+    let ioapic_addr = crate::util::DEVBASE + (crate::util::IOAPIC - crate::util::DEVSPACE);
     uart_println!("IOAPIC address: {:x}", ioapic_addr);
 
     // Get max entries from version register

@@ -5,10 +5,12 @@ mod allocator;
 mod gdt;
 mod ioapic;
 mod uart;
+mod util;
 mod vm;
 
 use allocator::Allocator;
 use core::panic::PanicInfo;
+use util::*;
 
 unsafe extern "C" {
     static __kernel_start: u8;
@@ -19,20 +21,6 @@ fn kernel_range() -> (usize, usize) {
     let start = unsafe { &__kernel_start as *const u8 as usize };
     let end = unsafe { &__kernel_end as *const u8 as usize };
     (start, end)
-}
-
-pub const KERNBASE: usize = 0xFFFFFFFF80000000; // First kernel virtual address
-pub const DEVBASE: usize = 0xFFFFFFFF40000000; // First device virtual address
-
-pub const DEVSPACE: usize = 0xFE000000; // First device physical address
-pub const IOAPIC: usize = 0xFEC00000;
-
-pub fn p2v(x: usize) -> usize {
-    x + KERNBASE
-}
-
-pub fn v2p(x: usize) -> usize {
-    x - KERNBASE
 }
 
 #[unsafe(no_mangle)]
@@ -50,13 +38,7 @@ pub extern "C" fn kmain() -> ! {
         .init1(kernel_range().1, p2v(128 * 1024 * 1024));
 
     // Debug
-    let addr = kernel.allocator.freelist as *const u8;
-    uart_println!("freelist: {:x}", addr as usize);
-    if !kernel.allocator.freelist.is_null() {
-        let freelist = unsafe { &*(kernel.allocator.freelist) };
-        let addr2 = freelist.next as *const u8;
-        uart_println!("freelist->next: {:x}", addr2 as usize);
-    }
+    debug_freelist(&mut kernel.allocator);
 
     // Kernel virtual memory
     let mut kvm = vm::Kvm::new();
@@ -75,14 +57,23 @@ pub extern "C" fn kmain() -> ! {
     gdt::init();
     uart_println!("GDT loaded");
 
-    ioapic::init();
+    unsafe {
+        ioapic::init();
+    }
     uart_println!("IOAPIC initialized");
 
+    // Debug
+    debug_freelist(&mut kernel.allocator);
     loop {
         unsafe {
             core::arch::asm!("hlt");
         }
     }
+}
+
+fn debug_freelist(allocator: &mut Allocator) {
+    let mut addr = allocator.freelist as *const u8 as usize;
+    uart_println!("freelist: 0x{:x}", addr);
 }
 
 fn make_linear(kvm: &mut vm::Kvm, allocator: &mut Allocator) {
@@ -134,8 +125,6 @@ impl Kernel {
         }
     }
 }
-
-pub const PG_SIZE: usize = 4096;
 
 unsafe fn test_paging() {
     let virt_addr1 = KERNBASE as *mut u32;
