@@ -55,12 +55,20 @@ pub extern "C" fn kmain() -> ! {
     // Page Table
     let mut kvm = vm::Kvm::new();
     kvm.init(&mut kernel.allocator);
-    // Map kernel [KERNBASE, KERNBASE + 128MB) -> [0, 128MB)
+    // Map [0, 0 + 1GiB) -> [0, 1GiB)
+    kvm.map(
+        &mut kernel.allocator,
+        0,
+        0,
+        0x40000000, // 1GiB
+        vm::PageTableEntry::WRITABLE,
+    );
+    // Map [KERNBASE, KERNBASE + 1GiB) -> [0, 1GiB)
     kvm.map(
         &mut kernel.allocator,
         KERNBASE as u64,
         0,
-        128 * 1024 * 1024,
+        0x40000000, // 1GiB
         vm::PageTableEntry::WRITABLE,
     );
     unsafe {
