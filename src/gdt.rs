@@ -1,5 +1,37 @@
 use core::mem::size_of;
 
+static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable {
+    table: [
+        Descriptor(0),
+        Descriptor(0),
+        Descriptor(0),
+        Descriptor(0),
+        Descriptor(0),
+    ], // Manually initialized because const fn is tricky with array repeat of structs sometimes or just to be safe
+};
+
+pub fn init() {
+    unsafe {
+        // Use addr_of_mut! to avoid creating intermediate references to static mut
+        let gdt = core::ptr::addr_of_mut!(GDT);
+        (*gdt) = GlobalDescriptorTable::new();
+
+        // Index 1: Kernel Code
+        (*gdt).set_entry(KCODE_SELECTOR_INDEX, Descriptor::kernel_code_segment());
+        // Index 2: Kernel Data
+        (*gdt).set_entry(KDATA_SELECTOR_INDEX, Descriptor::kernel_data_segment());
+        // Index 3: User Code
+        (*gdt).set_entry(UCODE_SELECTOR_INDEX, Descriptor::user_code_segment());
+        // Index 4: User Data
+        (*gdt).set_entry(UDATA_SELECTOR_INDEX, Descriptor::user_data_segment());
+
+        (*gdt).load();
+
+        // Reload segment registers
+        reload_segments(KCODE_SELECTOR, KDATA_SELECTOR);
+    }
+}
+
 // Segment Selectors
 const KCODE_SELECTOR_INDEX: usize = 1;
 const KDATA_SELECTOR_INDEX: usize = 2;
@@ -9,48 +41,6 @@ pub const KCODE_SELECTOR: u16 = (KCODE_SELECTOR_INDEX << 3) as u16;
 pub const KDATA_SELECTOR: u16 = (KDATA_SELECTOR_INDEX << 3) as u16;
 pub const UCODE_SELECTOR: u16 = (UCODE_SELECTOR_INDEX << 3 | 3) as u16;
 pub const UDATA_SELECTOR: u16 = (UDATA_SELECTOR_INDEX << 3 | 3) as u16;
-
-#[derive(Copy, Clone, Debug)]
-#[repr(transparent)]
-pub struct Descriptor(pub u64);
-
-impl Descriptor {
-    pub fn default() -> Self {
-        Self(0)
-    }
-
-    pub fn kernel_code_segment() -> Self {
-        let flags: u64 = (1 << 43) // Executable
-            | (1 << 44) // S (Descriptor Type)
-            | (1 << 47) // P (Present)
-            | (1 << 53); // L (Long Mode)
-        Self(flags)
-    }
-
-    pub fn kernel_data_segment() -> Self {
-        let flags: u64 = (1 << 41) // Read/Write
-            | (1 << 44) // S (Descriptor Type)
-            | (1 << 47); // P (Present)
-        Self(flags)
-    }
-
-    pub fn user_code_segment() -> Self {
-        let flags: u64 = (1 << 43) // Executable
-            | (1 << 44) // S (Descriptor Type)
-            | (3 << 45) // DPL = 3
-            | (1 << 47) // P (Present)
-            | (1 << 53); // L (Long Mode)
-        Self(flags)
-    }
-
-    pub fn user_data_segment() -> Self {
-        let flags: u64 = (1 << 41) // Read/Write
-            | (1 << 44) // S (Descriptor Type)
-            | (3 << 45) // DPL = 3
-            | (1 << 47); // P (Present)
-        Self(flags)
-    }
-}
 
 #[repr(C)]
 pub struct GlobalDescriptorTable {
@@ -90,54 +80,61 @@ struct GdtDescriptor {
     base: u64,
 }
 
-// Helper to create a snippet of a GDT entry.
-// For 64-bit code segment:
-// - L (Long Mode) = 1
-// - D (Size) = 0 (Must be 0 for 64-bit code)
-// - P (Present) = 1
-// - S (Descriptor Type) = 1 (Code/Data)
-// - Type = Executable | Read
-// - DPL = 0
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)]
+pub struct Descriptor(pub u64);
 
-// For 64-bit data segment:
-// - P (Present) = 1
-// - S (Descriptor Type) = 1 (Code/Data)
-// - Type = Read/Write
-// - DPL = 0
+impl Descriptor {
+    pub fn default() -> Self {
+        Self(0)
+    }
 
-static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable {
-    table: [
-        Descriptor(0),
-        Descriptor(0),
-        Descriptor(0),
-        Descriptor(0),
-        Descriptor(0),
-    ], // Manually initialized because const fn is tricky with array repeat of structs sometimes or just to be safe
-};
+    // Helper to create a snippet of a GDT entry.
+    // For 64-bit code segment:
+    // - Type = Executable
+    // - S (Descriptor Type) = 1 (Code/Data)
+    // - DPL = 0 (kernel) or 3 (user)
+    // - P (Present) = 1
+    // - L (Long Mode) = 1
 
-pub fn init() {
-    unsafe {
-        // Use addr_of_mut! to avoid creating intermediate references to static mut
-        let gdt = core::ptr::addr_of_mut!(GDT);
-        (*gdt) = GlobalDescriptorTable::new();
+    // For 64-bit data segment:
+    // - Type = Read/Write
+    // - S (Descriptor Type) = 1 (Code/Data)
+    // - DPL = 0 (kernel) or 3 (user)
+    // - P (Present) = 1
 
-        // Index 1: Kernel Code
-        let code_selector =
-            (*gdt).set_entry(KCODE_SELECTOR_INDEX, Descriptor::kernel_code_segment());
-        // Index 2: Kernel Data
-        let data_selector =
-            (*gdt).set_entry(KDATA_SELECTOR_INDEX, Descriptor::kernel_data_segment());
-        // Index 3: User Code
-        let ucode_selector =
-            (*gdt).set_entry(UCODE_SELECTOR_INDEX, Descriptor::user_code_segment()) | 3;
-        // Index 4: User Data
-        let udata_selector =
-            (*gdt).set_entry(UDATA_SELECTOR_INDEX, Descriptor::user_data_segment()) | 3;
+    pub fn kernel_code_segment() -> Self {
+        let flags: u64 = (1 << 43) // Executable
+            | (1 << 44) // S (Descriptor Type)
+            | (0 << 45) // DPL = 0
+            | (1 << 47) // P (Present)
+            | (1 << 53); // L (Long Mode)
+        Self(flags)
+    }
 
-        (*gdt).load();
+    pub fn kernel_data_segment() -> Self {
+        let flags: u64 = (1 << 41) // Read/Write
+            | (1 << 44) // S (Descriptor Type)
+            | (0 << 45) // DPL = 0
+            | (1 << 47); // P (Present)
+        Self(flags)
+    }
 
-        // Reload segment registers
-        reload_segments(KCODE_SELECTOR, KDATA_SELECTOR);
+    pub fn user_code_segment() -> Self {
+        let flags: u64 = (1 << 43) // Executable
+            | (1 << 44) // S (Descriptor Type)
+            | (3 << 45) // DPL = 3
+            | (1 << 47) // P (Present)
+            | (1 << 53); // L (Long Mode)
+        Self(flags)
+    }
+
+    pub fn user_data_segment() -> Self {
+        let flags: u64 = (1 << 41) // Read/Write
+            | (1 << 44) // S (Descriptor Type)
+            | (3 << 45) // DPL = 3
+            | (1 << 47); // P (Present)
+        Self(flags)
     }
 }
 
