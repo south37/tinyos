@@ -1,9 +1,12 @@
 #![no_std]
 #![no_main]
 
+mod allocator;
 mod uart;
+mod vm;
 
-use core::{cell::OnceCell, panic::PanicInfo};
+use allocator::Allocator;
+use core::panic::PanicInfo;
 
 unsafe extern "C" {
     static __kernel_start: u8;
@@ -16,10 +19,14 @@ fn kernel_range() -> (usize, usize) {
     (start, end)
 }
 
-const KERNBASE: usize = 0xFFFFFFFF80100000;
+const KERNBASE: usize = 0xFFFFFFFF80000000;
 
-fn p2v(x: usize) -> usize {
+pub fn p2v(x: usize) -> usize {
     x + KERNBASE
+}
+
+pub fn v2p(x: usize) -> usize {
+    x - KERNBASE
 }
 
 #[unsafe(no_mangle)]
@@ -39,9 +46,27 @@ pub extern "C" fn kmain() -> ! {
     // Debug
     let addr = kernel.allocator.freelist as *const u8;
     uart_println!("freelist: {:x}", addr as usize);
-    let freelist = unsafe { &*(kernel.allocator.freelist) };
-    let addr2 = freelist.next as *const u8;
-    uart_println!("freelist->next: {:x}", addr2 as usize);
+    if !kernel.allocator.freelist.is_null() {
+        let freelist = unsafe { &*(kernel.allocator.freelist) };
+        let addr2 = freelist.next as *const u8;
+        uart_println!("freelist->next: {:x}", addr2 as usize);
+    }
+
+    // Page Table
+    let mut kvm = vm::Kvm::new();
+    kvm.init(&mut kernel.allocator);
+    // Map kernel [KERNBASE, KERNBASE + 128MB) -> [0, 128MB)
+    kvm.map(
+        &mut kernel.allocator,
+        KERNBASE as u64,
+        0,
+        128 * 1024 * 1024,
+        vm::PageTableEntry::WRITABLE | vm::PageTableEntry::PRESENT,
+    );
+    unsafe {
+        kvm.load();
+    }
+    uart_println!("Page table loaded");
 
     loop {
         unsafe {
@@ -62,44 +87,7 @@ impl Kernel {
     }
 }
 
-struct Allocator {
-    freelist: *const Run,
-}
-
-struct Run {
-    next: *const Run,
-}
-
-impl Allocator {
-    fn new() -> Self {
-        Self {
-            freelist: core::ptr::null(),
-        }
-    }
-
-    fn init1(&mut self, vstart: usize, vend: usize) {
-        let mut p = pgroundup(vstart);
-        while p + PG_SIZE <= vend {
-            self.kfree(p);
-            p += PG_SIZE;
-        }
-    }
-
-    fn kfree(&mut self, addr: usize) {
-        unsafe {
-            core::ptr::write_bytes(addr as *mut u8, 1u8, PG_SIZE);
-        }
-        let run: &mut Run = unsafe { &mut *(addr as *mut Run) };
-        run.next = self.freelist;
-        self.freelist = run;
-    }
-}
-
-const PG_SIZE: usize = 4096;
-
-fn pgroundup(sz: usize) -> usize {
-    (sz + PG_SIZE - 1) & !(PG_SIZE - 1)
-}
+pub const PG_SIZE: usize = 4096;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {

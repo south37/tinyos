@@ -1,0 +1,134 @@
+use crate::allocator::Allocator;
+use crate::{PG_SIZE, p2v, v2p};
+
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct PageTableEntry(u64);
+
+impl PageTableEntry {
+    pub const PRESENT: u64 = 1 << 0;
+    pub const WRITABLE: u64 = 1 << 1;
+    pub const USER: u64 = 1 << 2;
+    pub const WRITE_THROUGH: u64 = 1 << 3;
+    pub const CACHE_DISABLE: u64 = 1 << 4;
+    pub const ACCESSED: u64 = 1 << 5;
+    pub const DIRTY: u64 = 1 << 6;
+    pub const HUGE_PAGE: u64 = 1 << 7;
+    pub const GLOBAL: u64 = 1 << 8;
+    pub const NO_EXECUTE: u64 = 1 << 63;
+
+    pub fn new(addr: u64, flags: u64) -> Self {
+        Self((addr & 0x000f_ffff_ffff_f000) | flags)
+    }
+
+    pub fn addr(&self) -> u64 {
+        self.0 & 0x000f_ffff_ffff_f000
+    }
+
+    pub fn flags(&self) -> u64 {
+        self.0 & 0xfff
+    }
+
+    pub fn is_present(&self) -> bool {
+        self.0 & Self::PRESENT != 0
+    }
+}
+
+#[repr(C, align(4096))]
+pub struct PageTable {
+    pub entries: [PageTableEntry; 512],
+}
+
+impl PageTable {
+    pub fn new() -> Self {
+        Self {
+            entries: [PageTableEntry(0); 512],
+        }
+    }
+}
+
+pub struct Kvm {
+    root: *mut PageTable,
+}
+
+impl Kvm {
+    pub fn new() -> Self {
+        Self {
+            root: core::ptr::null_mut(),
+        }
+    }
+
+    pub fn init(&mut self, allocator: &mut Allocator) {
+        self.root = allocator.alloc() as *mut PageTable;
+    }
+
+    pub fn map(&mut self, allocator: &mut Allocator, va: u64, pa: u64, sz: u64, perm: u64) -> bool {
+        let mut addr = pgrounddown(va);
+        let end = pgrounddown(va + sz - 1);
+        let mut pa = pa;
+
+        while addr <= end {
+            let pte = self.walk(allocator, addr, true);
+            if pte.is_none() {
+                return false;
+            }
+            let pte = pte.unwrap();
+            if pte.is_present() {
+                // Already mapped
+                // output warning?
+            }
+            *pte = PageTableEntry::new(pa, perm | PageTableEntry::PRESENT);
+
+            addr += PG_SIZE as u64;
+            pa += PG_SIZE as u64;
+        }
+        true
+    }
+
+    fn walk(
+        &mut self,
+        allocator: &mut Allocator,
+        va: u64,
+        alloc: bool,
+    ) -> Option<&mut PageTableEntry> {
+        let mut table = self.root;
+
+        // Level 4, 3, 2
+        for level in (1..4).rev() {
+            let idx = (va >> (12 + 9 * level)) & 0x1FF;
+            let pte = unsafe { &mut (*table).entries[idx as usize] };
+
+            if pte.is_present() {
+                table = p2v(pte.addr() as usize) as *mut PageTable;
+            } else {
+                if !alloc {
+                    return None;
+                }
+                let new_table = allocator.alloc() as *mut PageTable;
+                if new_table.is_null() {
+                    return None;
+                }
+                // Zero out new table (allocator already allows this? allocator.alloc clears memory? yes)
+                let pa = v2p(new_table as usize) as u64;
+                *pte = PageTableEntry::new(
+                    pa,
+                    PageTableEntry::PRESENT | PageTableEntry::WRITABLE | PageTableEntry::USER,
+                );
+                table = new_table;
+            }
+        }
+
+        let idx = (va >> 12) & 0x1FF;
+        unsafe { Some(&mut (*table).entries[idx as usize]) }
+    }
+
+    pub unsafe fn load(&self) {
+        unsafe {
+            core::arch::asm!("mov cr3, {}", in(reg) v2p(self.root as usize));
+        }
+    }
+}
+
+fn pgrounddown(x: u64) -> u64 {
+    x & !(PG_SIZE as u64 - 1)
+}
