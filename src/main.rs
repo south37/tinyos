@@ -19,7 +19,10 @@ fn kernel_range() -> (usize, usize) {
     (start, end)
 }
 
-const KERNBASE: usize = 0xFFFFFFFF80000000;
+const KERNBASE: usize = 0xFFFFFFFF80000000; // First kernel virtual address
+const DEVBASE: usize = 0xFFFFFFFF40000000; // First device virtual address
+
+const DEVSPACE: usize = 0xFE000000; // First device physical address
 
 pub fn p2v(x: usize) -> usize {
     x + KERNBASE
@@ -52,10 +55,10 @@ pub extern "C" fn kmain() -> ! {
         uart_println!("freelist->next: {:x}", addr2 as usize);
     }
 
-    // Page Table
+    // Kernel virtual memory
     let mut kvm = vm::Kvm::new();
     kvm.init(&mut kernel.allocator);
-    // Map [0, 0 + 1GiB) -> [0, 1GiB)
+    // Linear map. Virtual: [0, 0 + 1GiB) -> Physical: [0, 1GiB)
     kvm.map(
         &mut kernel.allocator,
         0,
@@ -63,7 +66,7 @@ pub extern "C" fn kmain() -> ! {
         0x40000000, // 1GiB
         vm::PageTableEntry::WRITABLE,
     );
-    // Map [KERNBASE, KERNBASE + 1GiB) -> [0, 1GiB)
+    // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
     kvm.map(
         &mut kernel.allocator,
         KERNBASE as u64,
@@ -71,6 +74,15 @@ pub extern "C" fn kmain() -> ! {
         0x40000000, // 1GiB
         vm::PageTableEntry::WRITABLE,
     );
+    // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
+    kvm.map(
+        &mut kernel.allocator,
+        DEVBASE as u64,
+        DEVSPACE as u64,
+        0x20000000, // 512MiB
+        vm::PageTableEntry::WRITABLE,
+    );
+    // Load page table. Switch cr3.
     unsafe {
         kvm.load();
     }

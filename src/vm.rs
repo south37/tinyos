@@ -1,7 +1,7 @@
 use crate::allocator::Allocator;
 use crate::{PG_SIZE, p2v, v2p};
 
-// Virtual memory
+// Kernel virtual memory
 pub struct Kvm {
     root: *mut PageTable,
 }
