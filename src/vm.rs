@@ -2,6 +2,8 @@ use crate::allocator::Allocator;
 use crate::uart_println;
 use crate::{DEVBASE, DEVSPACE, KERNBASE, PG_SIZE, p2v, v2p};
 
+const PG_SIZE_2M: u64 = 0x200000;
+
 // Kernel virtual memory
 pub struct Kvm {
     root: *mut PageTable,
@@ -24,7 +26,14 @@ impl Kvm {
         let mut pa = pa;
 
         while addr <= end {
-            let pte = self.walk(allocator, addr, true);
+            // Check if we can map a 2MB page
+            let use_2m = (addr % PG_SIZE_2M == 0)
+                && (pa % PG_SIZE_2M == 0)
+                && (addr + PG_SIZE_2M <= end + PG_SIZE as u64);
+
+            let level = if use_2m { 1 } else { 0 };
+
+            let pte = self.walk(allocator, addr, true, level);
             if pte.is_none() {
                 uart_println!("Failed to map address: {:x}", addr);
                 return false;
@@ -34,10 +43,20 @@ impl Kvm {
                 uart_println!("Address {:x} already mapped", addr);
                 return false;
             }
-            *pte = PageTableEntry::new(pa, perm | PageTableEntry::PRESENT);
 
-            addr += PG_SIZE as u64;
-            pa += PG_SIZE as u64;
+            let mut flags = perm | PageTableEntry::PRESENT;
+            if use_2m {
+                flags |= PageTableEntry::HUGE_PAGE;
+            }
+            *pte = PageTableEntry::new(pa, flags);
+
+            if use_2m {
+                addr += PG_SIZE_2M;
+                pa += PG_SIZE_2M;
+            } else {
+                addr += PG_SIZE as u64;
+                pa += PG_SIZE as u64;
+            }
         }
         true
     }
@@ -47,11 +66,15 @@ impl Kvm {
         allocator: &mut Allocator,
         va: u64,
         alloc: bool,
+        target_level: u8,
     ) -> Option<&mut PageTableEntry> {
         let mut table = self.root;
 
         // Level 4, 3, 2
         for level in (1..4).rev() {
+            if level <= target_level {
+                break;
+            }
             let idx = (va >> (12 + 9 * level)) & 0x1FF;
             let pte = unsafe { &mut (*table).entries[idx as usize] };
 
@@ -74,7 +97,8 @@ impl Kvm {
             }
         }
 
-        let idx = (va >> 12) & 0x1FF;
+        let shift = 12 + 9 * target_level;
+        let idx = (va >> shift) & 0x1FF;
         unsafe { Some(&mut (*table).entries[idx as usize]) }
     }
 
