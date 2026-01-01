@@ -36,7 +36,7 @@ pub extern "C" fn kmain() -> ! {
     let mut kernel = Kernel::new();
     kernel
         .allocator
-        .init1(kernel_range().1, p2v(128 * 1024 * 1024));
+        .init(kernel_range().1, p2v(4 * 1024 * 1024));
 
     // Debug
     debug_freelist(&mut kernel.allocator);
@@ -54,6 +54,11 @@ pub extern "C" fn kmain() -> ! {
     unsafe {
         test_paging();
     }
+
+    // Init allocator again
+    kernel
+        .allocator
+        .init(p2v(4 * 1024 * 1024), p2v(128 * 1024 * 1024));
 
     gdt::init();
     uart_println!("GDT loaded");

@@ -15,8 +15,9 @@ impl Allocator {
         }
     }
 
-    pub fn init1(&mut self, vstart: usize, vend: usize) {
+    pub fn init(&mut self, vstart: usize, vend: usize) {
         let mut p = pgroundup(vstart);
+
         while p + PG_SIZE <= vend {
             self.kfree(p);
             p += PG_SIZE;

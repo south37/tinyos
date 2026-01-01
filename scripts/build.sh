@@ -5,4 +5,4 @@ set -eux
 make -C entry
 
 cargo clean
-cargo build
+cargo build --release

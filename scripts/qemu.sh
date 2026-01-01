@@ -14,7 +14,7 @@ for arg in "$@"; do
 done
 
 qemu-system-x86_64 \
-  -kernel ./target/x86_64-unknown-none/debug/tinyos \
+  -kernel ./target/x86_64-unknown-none/release/tinyos \
   -d int,mmu,guest_errors \
   -D qemu.log \
   $QEMUOPTS
