@@ -115,7 +115,7 @@ impl Kernel {
 pub const PG_SIZE: usize = 4096;
 
 unsafe fn test_paging() {
-    let virt_addr1 = KERNBASE as *mut u64;
+    let virt_addr1 = KERNBASE as *mut u32;
 
     uart_println!("Testing paging...");
 
@@ -128,9 +128,9 @@ unsafe fn test_paging() {
     unsafe { *virt_addr1 = 0xDEADBEEF };
 
     // Read from address 0 using assembly to avoid Rust null pointer check/panic
-    let val: u64;
+    let val: u32;
     unsafe {
-        core::arch::asm!("mov {}, [0]", out(reg) val);
+        core::arch::asm!("mov {0:e}, [0]", out(reg) val);
     }
     uart_println!("Read 0x{:x} from address 0", val);
 
