@@ -25,9 +25,6 @@ impl Allocator {
     }
 
     pub fn kfree(&mut self, addr: usize) {
-        unsafe {
-            core::ptr::write_bytes(addr as *mut u8, 1u8, PG_SIZE);
-        }
         let run: &mut Run = unsafe { &mut *(addr as *mut Run) };
         run.next = self.freelist;
         self.freelist = run;
@@ -41,7 +38,7 @@ impl Allocator {
         unsafe {
             self.freelist = (*run).next;
             // Zero out run
-            core::ptr::write_bytes(run as *mut u8, 0u8, PG_SIZE);
+            crate::util::stosq(run as *mut u64, 0, PG_SIZE / 8);
         }
         run as *mut u8
     }

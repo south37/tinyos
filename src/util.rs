@@ -22,3 +22,14 @@ pub fn io2v(x: usize) -> usize {
 pub const T_IRQ0: u32 = 32;
 pub const IRQ_TIMER: u32 = 0;
 pub const IRQ_ERROR: u32 = 19;
+
+pub unsafe fn stosq(addr: *mut u64, val: u64, count: usize) {
+    unsafe {
+        core::arch::asm!(
+            "rep stosq",
+            inout("rdi") addr => _,
+            inout("rcx") count => _,
+            in("rax") val,
+        );
+    }
+}
