@@ -6,6 +6,7 @@ mod gdt;
 mod ioapic;
 mod lapic;
 mod proc;
+mod trap;
 mod uart;
 mod util;
 mod vm;
@@ -70,8 +71,17 @@ pub extern "C" fn kmain() -> ! {
     ioapic::init();
     uart_println!("IOAPIC initialized");
 
+    trap::init();
+    uart_println!("Traps initialized");
+
     proc::init_process(&mut kernel.allocator);
     uart_println!("Init process initialized");
+
+    // Enable interrupts
+    unsafe {
+        core::arch::asm!("sti");
+    }
+
     proc::scheduler();
 
     // Debug

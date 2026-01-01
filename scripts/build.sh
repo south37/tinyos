@@ -2,7 +2,7 @@
 
 set -eux
 
-make -C entry
+make -C asm
 
 cargo clean
 cargo build --release
