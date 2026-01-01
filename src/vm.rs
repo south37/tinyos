@@ -1,5 +1,5 @@
 use crate::allocator::Allocator;
-use crate::{PG_SIZE, p2v, v2p};
+use crate::{DEVBASE, DEVSPACE, KERNBASE, PG_SIZE, p2v, v2p};
 
 // Kernel virtual memory
 pub struct Kvm {

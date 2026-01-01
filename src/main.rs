@@ -20,10 +20,11 @@ fn kernel_range() -> (usize, usize) {
     (start, end)
 }
 
-const KERNBASE: usize = 0xFFFFFFFF80000000; // First kernel virtual address
-const DEVBASE: usize = 0xFFFFFFFF40000000; // First device virtual address
+pub const KERNBASE: usize = 0xFFFFFFFF80000000; // First kernel virtual address
+pub const DEVBASE: usize = 0xFFFFFFFF40000000; // First device virtual address
 
-const DEVSPACE: usize = 0xFE000000; // First device physical address
+pub const DEVSPACE: usize = 0xFE000000; // First device physical address
+const IOAPIC: usize = 0xFEC00000;
 
 pub fn p2v(x: usize) -> usize {
     x + KERNBASE
@@ -59,32 +60,8 @@ pub extern "C" fn kmain() -> ! {
     // Kernel virtual memory
     let mut kvm = vm::Kvm::new();
     kvm.init(&mut kernel.allocator);
-    // Linear map. Virtual: [0, 0 + 1GiB) -> Physical: [0, 1GiB)
-    kvm.map(
-        &mut kernel.allocator,
-        0,
-        0,
-        0x40000000, // 1GiB
-        vm::PageTableEntry::WRITABLE,
-    );
-    // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
-    kvm.map(
-        &mut kernel.allocator,
-        KERNBASE as u64,
-        0,
-        0x40000000, // 1GiB
-        vm::PageTableEntry::WRITABLE,
-    );
-    // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
-    kvm.map(
-        &mut kernel.allocator,
-        DEVBASE as u64,
-        DEVSPACE as u64,
-        0x20000000, // 512MiB
-        vm::PageTableEntry::WRITABLE
-            | vm::PageTableEntry::WRITE_THROUGH
-            | vm::PageTableEntry::CACHE_DISABLE,
-    );
+    // Linear map
+    make_linear(&mut kvm, &mut kernel.allocator);
     // Load page table. Switch cr3.
     unsafe {
         kvm.load();
@@ -102,6 +79,35 @@ pub extern "C" fn kmain() -> ! {
             core::arch::asm!("hlt");
         }
     }
+}
+
+fn make_linear(kvm: &mut vm::Kvm, allocator: &mut Allocator) {
+    // Linear map. Virtual: [0, 0 + 1GiB) -> Physical: [0, 1GiB)
+    kvm.map(
+        allocator,
+        0,
+        0,
+        0x40000000, // 1GiB
+        vm::PageTableEntry::WRITABLE,
+    );
+    // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
+    kvm.map(
+        allocator,
+        KERNBASE as u64,
+        0,
+        0x40000000, // 1GiB
+        vm::PageTableEntry::WRITABLE,
+    );
+    // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
+    kvm.map(
+        allocator,
+        DEVBASE as u64,
+        DEVSPACE as u64,
+        0x20000000, // 512MiB
+        vm::PageTableEntry::WRITABLE
+            | vm::PageTableEntry::WRITE_THROUGH
+            | vm::PageTableEntry::CACHE_DISABLE,
+    );
 }
 
 struct Kernel {
