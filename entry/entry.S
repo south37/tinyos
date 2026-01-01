@@ -1,5 +1,5 @@
 # Entry point of kernel. Start as a 32-bit protected mode, and 
-# switches to 64-bit long mode, then jump to main.
+# switches to 64-bit long mode, then jump to kmain.
 
 .section .multiboot
 .global mboot_header
@@ -36,7 +36,7 @@ mboot_header:
 # First kernel virtual address
 #define KERNBASE 0xFFFFFFFF80000000
 
-# Address of the initial page table. Linear map of [0-1GiB).
+# Address of the initial page table. Linear map [0-1GiB).
 #define PAGETABLE 0x1000
 # Page table/directory entry flags.
 #define PTE_P  0x001   // Present

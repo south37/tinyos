@@ -115,22 +115,24 @@ impl Kernel {
 pub const PG_SIZE: usize = 4096;
 
 unsafe fn test_paging() {
-    let virt_addr1 = (KERNBASE + 8) as *mut u64;
-    let virt_addr2 = 8 as *const u64;
+    let virt_addr1 = KERNBASE as *mut u64;
 
     uart_println!("Testing paging...");
 
     // Save original value
     let original_value = unsafe { *virt_addr1 };
-    uart_println!("Original value at KERNBASE: 0x{:x}", original_value);
+    uart_println!("Original value at KERNBASE: {:x}", original_value);
 
     // Write to KERNBASE
-    uart_println!("Writing 0xDEADBEEF to address `KERNBASE+8`");
+    uart_println!("Writing 0xDEADBEEF to KERNBASE");
     unsafe { *virt_addr1 = 0xDEADBEEF };
 
-    // Read from address 0
-    let val = unsafe { *virt_addr2 };
-    uart_println!("Read 0x{:x} from address `8`", val);
+    // Read from address 0 using assembly to avoid Rust null pointer check/panic
+    let val: u64;
+    unsafe {
+        core::arch::asm!("mov {}, [0]", out(reg) val);
+    }
+    uart_println!("Read {:x} from address 0", val);
 
     if val == 0xDEADBEEF {
         uart_println!("Paging test passed!");
