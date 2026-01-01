@@ -95,6 +95,7 @@ const FLAGS_MASK: u64 = 0xfff;
 #[derive(Clone, Copy)]
 pub struct PageTableEntry(u64);
 
+#[allow(dead_code)]
 impl PageTableEntry {
     pub const PRESENT: u64 = 1 << 0;
     pub const WRITABLE: u64 = 1 << 1;

@@ -80,7 +80,9 @@ pub extern "C" fn kmain() -> ! {
         DEVBASE as u64,
         DEVSPACE as u64,
         0x20000000, // 512MiB
-        vm::PageTableEntry::WRITABLE,
+        vm::PageTableEntry::WRITABLE
+            | vm::PageTableEntry::WRITE_THROUGH
+            | vm::PageTableEntry::CACHE_DISABLE,
     );
     // Load page table. Switch cr3.
     unsafe {
