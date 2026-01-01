@@ -72,7 +72,7 @@ pub extern "C" fn kmain() -> ! {
 }
 
 fn debug_freelist(allocator: &mut Allocator) {
-    let mut addr = allocator.freelist as *const u8 as usize;
+    let addr = allocator.freelist as *const u8 as usize;
     uart_println!("freelist: 0x{:x}", addr);
 }
 

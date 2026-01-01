@@ -1,6 +1,6 @@
 use crate::allocator::Allocator;
 use crate::uart_println;
-use crate::util::{DEVBASE, DEVSPACE, KERNBASE, PG_SIZE, p2v, v2p};
+use crate::util::{PG_SIZE, p2v, v2p};
 
 const PG_SIZE_2M: u64 = 0x200000;
 
