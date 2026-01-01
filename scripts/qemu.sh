@@ -2,7 +2,7 @@
 
 set -eux
 
-QEMUOPTS="-nographic -serial mon:stdio"
+QEMUOPTS="-m 128M -net none -nographic -serial mon:stdio"
 for arg in "$@"; do
     case "$arg" in  
         "gdb")

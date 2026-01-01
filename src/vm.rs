@@ -30,7 +30,7 @@ impl Kvm {
             let pte = pte.unwrap();
             if pte.is_present() {
                 // Already mapped
-                // output warning?
+                return false;
             }
             *pte = PageTableEntry::new(pa, perm | PageTableEntry::PRESENT);
 
@@ -88,6 +88,9 @@ pub struct PageTable {
     pub entries: [PageTableEntry; 512],
 }
 
+const ADDR_MASK: u64 = 0x000f_ffff_ffff_f000;
+const FLAGS_MASK: u64 = 0xfff;
+
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct PageTableEntry(u64);
@@ -105,15 +108,15 @@ impl PageTableEntry {
     pub const NO_EXECUTE: u64 = 1 << 63;
 
     pub fn new(addr: u64, flags: u64) -> Self {
-        Self((addr & 0x000f_ffff_ffff_f000) | flags)
+        Self((addr & ADDR_MASK) | (flags & FLAGS_MASK))
     }
 
     pub fn addr(&self) -> u64 {
-        self.0 & 0x000f_ffff_ffff_f000
+        self.0 & ADDR_MASK
     }
 
     pub fn flags(&self) -> u64 {
-        self.0 & 0xfff
+        self.0 & FLAGS_MASK
     }
 
     pub fn is_present(&self) -> bool {

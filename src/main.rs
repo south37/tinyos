@@ -61,7 +61,7 @@ pub extern "C" fn kmain() -> ! {
         KERNBASE as u64,
         0,
         128 * 1024 * 1024,
-        vm::PageTableEntry::WRITABLE | vm::PageTableEntry::PRESENT,
+        vm::PageTableEntry::WRITABLE,
     );
     unsafe {
         kvm.load();
