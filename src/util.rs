@@ -18,3 +18,7 @@ pub fn v2p(x: usize) -> usize {
 pub fn io2v(x: usize) -> usize {
     x - DEVSPACE + DEVBASE
 }
+
+pub const T_IRQ0: u32 = 32;
+pub const IRQ_TIMER: u32 = 0;
+pub const IRQ_ERROR: u32 = 19;

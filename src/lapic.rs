@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::util::LAPIC_ADDR;
+use crate::util::{IRQ_ERROR, IRQ_TIMER, LAPIC_ADDR, T_IRQ0};
 
 // Local APIC registers
 const ID: u32 = 0x0020; // ID
@@ -20,7 +20,7 @@ const TICR: u32 = 0x0380; // Timer Initial Count
 const TCCR: u32 = 0x0390; // Timer Current Count
 const TDCR: u32 = 0x03E0; // Timer Divide Configuration
 
-const T_IRQ0: u32 = 32;
+const MASKED: u32 = 0x10000;
 
 pub fn init() {
     let lapic = crate::util::io2v(LAPIC_ADDR);
@@ -34,21 +34,21 @@ pub fn init() {
         // If we weren't driven by interrupt (e.g. context switch),
         // we would need to tune this.
         write(lapic, TDCR, 0x0B); // Divide by 1
-        write(lapic, TIMER, 0x20000 | (T_IRQ0 + 0)); // Periodic
+        write(lapic, TIMER, 0x20000 | (T_IRQ0 + IRQ_TIMER)); // Periodic
         write(lapic, TICR, 10000000);
 
         // Disable logical interrupt lines.
-        write(lapic, LINT0, 0x10000);
-        write(lapic, LINT1, 0x10000);
+        write(lapic, LINT0, MASKED);
+        write(lapic, LINT1, MASKED);
 
         // Disable performance counter overflow interrupts
         // on machines that provide that interrupt entry.
         if ((read(lapic, VER) >> 16) & 0xFF) >= 4 {
-            write(lapic, PCINT, 0x10000);
+            write(lapic, PCINT, MASKED);
         }
 
         // Map error interrupt to IRQ_ERROR.
-        write(lapic, ERROR, T_IRQ0 + 19);
+        write(lapic, ERROR, T_IRQ0 + IRQ_ERROR);
 
         // Clear error status register (requires back-to-back writes).
         write(lapic, ESR, 0);
@@ -59,9 +59,9 @@ pub fn init() {
 
         // Send an Init Level De-Assert to synchronise arbitration ID's.
         write(lapic, ICRHI, 0);
-        write(lapic, ICRLO, 0x00 | 0x02 | 0x0500); // BCAST | INIT | LEVEL
+        write(lapic, ICRLO, 0x80000 | 0x0500 | 0x8000); // BCAST | INIT | LEVEL
 
-        // Wait for set status bit to clear
+        // Wait for the send to finish.
         while read(lapic, ICRLO) & 0x1000 != 0 {}
 
         // Enable interrupts on the APIC (but not on the processor).

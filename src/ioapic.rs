@@ -1,9 +1,7 @@
 #![allow(dead_code)]
 
 use crate::uart_println;
-use crate::util::IOAPIC_ADDR;
-
-const T_IRQ0: u32 = 32;
+use crate::util::{IOAPIC_ADDR, IRQ_TIMER, T_IRQ0};
 
 const REG_ID: u32 = 0x00;
 const REG_VER: u32 = 0x01;
