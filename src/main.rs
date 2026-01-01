@@ -121,7 +121,7 @@ unsafe fn test_paging() {
 
     // Save original value
     let original_value = unsafe { *virt_addr1 };
-    uart_println!("Original value at KERNBASE: {:x}", original_value);
+    uart_println!("Original value at KERNBASE: 0x{:x}", original_value);
 
     // Write to KERNBASE
     uart_println!("Writing 0xDEADBEEF to KERNBASE");
@@ -132,7 +132,7 @@ unsafe fn test_paging() {
     unsafe {
         core::arch::asm!("mov {}, [0]", out(reg) val);
     }
-    uart_println!("Read {:x} from address 0", val);
+    uart_println!("Read 0x{:x} from address 0", val);
 
     if val == 0xDEADBEEF {
         uart_println!("Paging test passed!");
