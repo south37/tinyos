@@ -5,6 +5,7 @@ mod allocator;
 mod gdt;
 mod ioapic;
 mod lapic;
+mod proc;
 mod uart;
 mod util;
 mod vm;
@@ -58,7 +59,7 @@ pub extern "C" fn kmain() -> ! {
     // Init allocator again
     kernel
         .allocator
-        .init(p2v(4 * 1024 * 1024), p2v(256 * 1024 * 1024));
+        .init(p2v(4 * 1024 * 1024), p2v(128 * 1024 * 1024));
 
     gdt::init();
     uart_println!("GDT loaded");
@@ -68,6 +69,10 @@ pub extern "C" fn kmain() -> ! {
 
     ioapic::init();
     uart_println!("IOAPIC initialized");
+
+    proc::init_process(&mut kernel.allocator);
+    uart_println!("Init process initialized");
+    proc::scheduler();
 
     // Debug
     debug_freelist(&mut kernel.allocator);
