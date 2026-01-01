@@ -92,7 +92,6 @@ unsafe extern "C" {
 extern "C" fn trap_handler(tf: &mut TrapFrame) {
     match tf.trap_num {
         n if n == (T_IRQ0 + IRQ_TIMER) as u64 => {
-            uart_println!("Timer");
             // Ack LAPIC
             crate::lapic::eoi();
         }
