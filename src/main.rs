@@ -35,8 +35,6 @@ pub fn v2p(x: usize) -> usize {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kmain() -> ! {
-    gdt::init();
-    uart_println!("GDT loaded");
     uart_println!("Hello, world!");
     uart_println!(
         "kernel range: {:x} - {:x}",
@@ -95,6 +93,9 @@ pub extern "C" fn kmain() -> ! {
     unsafe {
         test_paging();
     }
+
+    gdt::init();
+    uart_println!("GDT loaded");
 
     loop {
         unsafe {
