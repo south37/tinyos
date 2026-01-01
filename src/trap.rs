@@ -19,6 +19,7 @@ pub fn init() {
         // Syscall gate (DPL=3)
         // For now, let's keep it as interrupt gate but allow user (DPL=3)
         // Type=0xE (Interrupt Gate), DPL=3, P=1 => 0xEE.
+        // TODO: Use 64-bit Trap Gate (= 0xF).
         IDT[T_SYSCALL as usize].type_attr = 0xEE;
 
         let idtr = Idtr {
@@ -93,15 +94,7 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
         n if n == (T_IRQ0 + IRQ_TIMER) as u64 => {
             uart_println!("Timer");
             // Ack LAPIC
-            unsafe {
-                // We need to reference lapic::eoi().
-                // Since lapic is mod, we can't easily access init code's knowledge of LAPIC addr easily without util.
-                // Re-implement minimal EOI here or expose lapic::eoi.
-                // Ideally expose lapic::eoi.
-                // For now, hacky write to EOI.
-                let lapic = crate::util::io2v(crate::util::LAPIC_ADDR);
-                core::ptr::write_volatile((lapic + 0x00B0) as *mut u32, 0);
-            }
+            crate::lapic::eoi();
         }
         n if n == T_SYSCALL as u64 => {
             uart_println!("Syscall");

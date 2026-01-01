@@ -69,6 +69,13 @@ pub fn init() {
     }
 }
 
+pub fn eoi() {
+    let lapic = crate::util::io2v(LAPIC_ADDR);
+    unsafe {
+        write(lapic, EOI, 0);
+    }
+}
+
 unsafe fn write(lapic: usize, reg: u32, val: u32) {
     unsafe {
         core::ptr::write_volatile((lapic + reg as usize) as *mut u32, val);
