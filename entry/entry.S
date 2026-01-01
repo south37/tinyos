@@ -136,7 +136,7 @@ entry64high:
     mov    %ax, %fs
     mov    %ax, %gs
 
-    # Setup initial stack (16kiB)
+    # Setup initial stack (64kiB)
     mov    $(KERNBASE + 0x10000), %rax
     mov    %rax, %rsp
 
