@@ -1,2 +1,7 @@
+# Build
 /target
 *.o
+
+# Dev
+*.swp
+qemu.log

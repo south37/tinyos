@@ -15,4 +15,6 @@ done
 
 qemu-system-x86_64 \
   -kernel ./target/x86_64-unknown-none/debug/tinyos \
+  -d int,mmu,guest_errors \
+  -D qemu.log \
   $QEMUOPTS

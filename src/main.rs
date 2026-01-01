@@ -3,6 +3,7 @@
 
 mod allocator;
 mod gdt;
+mod ioapic;
 mod uart;
 mod vm;
 
@@ -24,7 +25,7 @@ pub const KERNBASE: usize = 0xFFFFFFFF80000000; // First kernel virtual address
 pub const DEVBASE: usize = 0xFFFFFFFF40000000; // First device virtual address
 
 pub const DEVSPACE: usize = 0xFE000000; // First device physical address
-const IOAPIC: usize = 0xFEC00000;
+pub const IOAPIC: usize = 0xFEC00000;
 
 pub fn p2v(x: usize) -> usize {
     x + KERNBASE
@@ -46,7 +47,7 @@ pub extern "C" fn kmain() -> ! {
     let mut kernel = Kernel::new();
     kernel
         .allocator
-        .init1(kernel_range().1, p2v(4 * 1024 * 1024));
+        .init1(kernel_range().1, p2v(128 * 1024 * 1024));
 
     // Debug
     let addr = kernel.allocator.freelist as *const u8;
@@ -63,9 +64,7 @@ pub extern "C" fn kmain() -> ! {
     // Linear map
     make_linear(&mut kvm, &mut kernel.allocator);
     // Load page table. Switch cr3.
-    unsafe {
-        kvm.load();
-    }
+    kvm.load();
     uart_println!("Page table loaded");
     unsafe {
         test_paging();
@@ -73,6 +72,9 @@ pub extern "C" fn kmain() -> ! {
 
     gdt::init();
     uart_println!("GDT loaded");
+
+    ioapic::init();
+    uart_println!("IOAPIC initialized");
 
     loop {
         unsafe {
@@ -83,23 +85,29 @@ pub extern "C" fn kmain() -> ! {
 
 fn make_linear(kvm: &mut vm::Kvm, allocator: &mut Allocator) {
     // Linear map. Virtual: [0, 0 + 1GiB) -> Physical: [0, 1GiB)
-    kvm.map(
+    let r = kvm.map(
         allocator,
         0,
         0,
         0x40000000, // 1GiB
         vm::PageTableEntry::WRITABLE,
     );
+    if !r {
+        uart_println!("Linear map 1 failed");
+    }
     // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
-    kvm.map(
+    let r = kvm.map(
         allocator,
         KERNBASE as u64,
         0,
         0x40000000, // 1GiB
         vm::PageTableEntry::WRITABLE,
     );
+    if !r {
+        uart_println!("Linear map 2 failed");
+    }
     // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
-    kvm.map(
+    let r = kvm.map(
         allocator,
         DEVBASE as u64,
         DEVSPACE as u64,
@@ -108,6 +116,9 @@ fn make_linear(kvm: &mut vm::Kvm, allocator: &mut Allocator) {
             | vm::PageTableEntry::WRITE_THROUGH
             | vm::PageTableEntry::CACHE_DISABLE,
     );
+    if !r {
+        uart_println!("Linear map 3 failed");
+    }
 }
 
 struct Kernel {

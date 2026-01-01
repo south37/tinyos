@@ -1,4 +1,5 @@
 use crate::allocator::Allocator;
+use crate::uart_println;
 use crate::{DEVBASE, DEVSPACE, KERNBASE, PG_SIZE, p2v, v2p};
 
 // Kernel virtual memory
@@ -25,11 +26,12 @@ impl Kvm {
         while addr <= end {
             let pte = self.walk(allocator, addr, true);
             if pte.is_none() {
+                uart_println!("Failed to map address: {:x}", addr);
                 return false;
             }
             let pte = pte.unwrap();
             if pte.is_present() {
-                // Already mapped
+                uart_println!("Address {:x} already mapped", addr);
                 return false;
             }
             *pte = PageTableEntry::new(pa, perm | PageTableEntry::PRESENT);
@@ -76,7 +78,7 @@ impl Kvm {
         unsafe { Some(&mut (*table).entries[idx as usize]) }
     }
 
-    pub unsafe fn load(&self) {
+    pub fn load(&self) {
         unsafe {
             core::arch::asm!("mov cr3, {}", in(reg) v2p(self.root as usize));
         }
