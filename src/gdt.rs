@@ -1,7 +1,11 @@
 use core::mem::size_of;
 
+static mut TSS: TaskStateSegment = TaskStateSegment::new();
+
 static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable {
     table: [
+        Descriptor(0),
+        Descriptor(0),
         Descriptor(0),
         Descriptor(0),
         Descriptor(0),
@@ -25,10 +29,25 @@ pub fn init() {
         // Index 4: User Data
         (*gdt).set_entry(UDATA_SELECTOR_INDEX, Descriptor::user_data_segment());
 
+        // Index 5: TSS (128 bit)
+        let tss = &*core::ptr::addr_of!(TSS);
+        let (tss_low, tss_high) = Descriptor::tss_segment(tss);
+        (*gdt).set_entry(TSS_SELECTOR_INDEX, tss_low);
+        (*gdt).set_entry(TSS_SELECTOR_INDEX + 1, tss_high);
+
         (*gdt).load();
 
         // Reload segment registers
         reload_segments(KCODE_SELECTOR, KDATA_SELECTOR);
+
+        // Load Task Register
+        load_tr(TSS_SELECTOR);
+    }
+}
+
+unsafe fn load_tr(selector: u16) {
+    unsafe {
+        core::arch::asm!("ltr {0:x}", in(reg) selector, options(nostack, preserves_flags));
     }
 }
 
@@ -37,20 +56,47 @@ const KCODE_SELECTOR_INDEX: usize = 1;
 const KDATA_SELECTOR_INDEX: usize = 2;
 const UCODE_SELECTOR_INDEX: usize = 3;
 const UDATA_SELECTOR_INDEX: usize = 4;
+const TSS_SELECTOR_INDEX: usize = 5;
 pub const KCODE_SELECTOR: u16 = (KCODE_SELECTOR_INDEX << 3) as u16;
 pub const KDATA_SELECTOR: u16 = (KDATA_SELECTOR_INDEX << 3) as u16;
 pub const UCODE_SELECTOR: u16 = (UCODE_SELECTOR_INDEX << 3 | 3) as u16;
 pub const UDATA_SELECTOR: u16 = (UDATA_SELECTOR_INDEX << 3 | 3) as u16;
+pub const TSS_SELECTOR: u16 = (TSS_SELECTOR_INDEX << 3) as u16;
+
+#[repr(C, packed)]
+pub struct TaskStateSegment {
+    reserved1: u32,                      // 4 bytes
+    pub privilege_stack_table: [u64; 3], // 24 bytes
+    reserved2: u64,                      // 8 bytes
+    pub interrupt_stack_table: [u64; 7], // 56 bytes
+    reserved3: u64,                      // 8 bytes
+    reserved4: u16,                      // 2 bytes
+    pub iomap_base: u16,                 // 2 bytes
+}
+
+impl TaskStateSegment {
+    pub const fn new() -> Self {
+        Self {
+            reserved1: 0,
+            privilege_stack_table: [0; 3],
+            reserved2: 0,
+            interrupt_stack_table: [0; 7],
+            reserved3: 0,
+            reserved4: 0,
+            iomap_base: 104, // End of TSS
+        }
+    }
+}
 
 #[repr(C)]
 pub struct GlobalDescriptorTable {
-    table: [Descriptor; 5], // Null, Kernel Code, Kernel Data, User Code, User Data
+    table: [Descriptor; 7], // Null, Kernel Code, Kernel Data, User Code, User Data, TSS (2 entries)
 }
 
 impl GlobalDescriptorTable {
     pub fn new() -> Self {
         Self {
-            table: [Descriptor::default(); 5],
+            table: [Descriptor::default(); 7],
         }
     }
 
@@ -135,6 +181,23 @@ impl Descriptor {
             | (3 << 45) // DPL = 3
             | (1 << 47); // P (Present)
         Self(flags)
+    }
+
+    pub fn tss_segment(tss: &'static TaskStateSegment) -> (Self, Self) {
+        let ptr = tss as *const _ as u64;
+        let size = size_of::<TaskStateSegment>() as u64 - 1; // = 103
+
+        let low = (size & 0xFFFF)
+            | ((ptr & 0xFFFFFF) << 16)
+            | (0x9 << 40) // Type: 0x9 (TSS Available)
+            | (3 << 45)   // DPL = 3
+            | (1 << 47)   // Present
+            | ((size & 0xF0000) << 32)
+            | ((ptr & 0xFF000000) << 32);
+
+        let high = ptr >> 32;
+
+        (Self(low), Self(high))
     }
 }
 
