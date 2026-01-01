@@ -89,6 +89,9 @@ pub extern "C" fn kmain() -> ! {
         kvm.load();
     }
     uart_println!("Page table loaded");
+    unsafe {
+        test_paging();
+    }
 
     loop {
         unsafe {
@@ -110,6 +113,34 @@ impl Kernel {
 }
 
 pub const PG_SIZE: usize = 4096;
+
+unsafe fn test_paging() {
+    let virt_addr1 = (KERNBASE + 8) as *mut u64;
+    let virt_addr2 = 8 as *const u64;
+
+    uart_println!("Testing paging...");
+
+    // Save original value
+    let original_value = unsafe { *virt_addr1 };
+    uart_println!("Original value at KERNBASE: 0x{:x}", original_value);
+
+    // Write to KERNBASE
+    uart_println!("Writing 0xDEADBEEF to address `KERNBASE+8`");
+    unsafe { *virt_addr1 = 0xDEADBEEF };
+
+    // Read from address 0
+    let val = unsafe { *virt_addr2 };
+    uart_println!("Read 0x{:x} from address `8`", val);
+
+    if val == 0xDEADBEEF {
+        uart_println!("Paging test passed!");
+    } else {
+        uart_println!("Paging test failed!");
+    }
+
+    // Restore
+    unsafe { *virt_addr1 = original_value };
+}
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
