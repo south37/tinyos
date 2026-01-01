@@ -1,10 +1,14 @@
 use core::mem::size_of;
 
 // Segment Selectors
-pub const KCODE_SELECTOR: u16 = 0x08;
-pub const KDATA_SELECTOR: u16 = 0x10;
-pub const UCODE_SELECTOR: u16 = 0x18 | 3;
-pub const UDATA_SELECTOR: u16 = 0x20 | 3;
+const KCODE_SELECTOR_INDEX: usize = 1;
+const KDATA_SELECTOR_INDEX: usize = 2;
+const UCODE_SELECTOR_INDEX: usize = 3;
+const UDATA_SELECTOR_INDEX: usize = 4;
+pub const KCODE_SELECTOR: u16 = (KCODE_SELECTOR_INDEX << 3) as u16;
+pub const KDATA_SELECTOR: u16 = (KDATA_SELECTOR_INDEX << 3) as u16;
+pub const UCODE_SELECTOR: u16 = (UCODE_SELECTOR_INDEX << 3 | 3) as u16;
+pub const UDATA_SELECTOR: u16 = (UDATA_SELECTOR_INDEX << 3 | 3) as u16;
 
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
@@ -51,24 +55,20 @@ impl Descriptor {
 #[repr(C)]
 pub struct GlobalDescriptorTable {
     table: [Descriptor; 5], // Null, Kernel Code, Kernel Data, User Code, User Data
-    next_free: usize,
 }
 
 impl GlobalDescriptorTable {
     pub fn new() -> Self {
         Self {
             table: [Descriptor::default(); 5],
-            next_free: 1, // Skip null descriptor
         }
     }
 
-    pub fn add_entry(&mut self, desc: Descriptor) -> u16 {
-        let index = self.next_free;
+    pub fn set_entry(&mut self, index: usize, desc: Descriptor) -> u16 {
         if index >= self.table.len() {
-            panic!("GDT full");
+            panic!("GDT index out of bounds");
         }
         self.table[index] = desc;
-        self.next_free += 1;
         (index * 8) as u16
     }
 
@@ -113,7 +113,6 @@ static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable {
         Descriptor(0),
         Descriptor(0),
     ], // Manually initialized because const fn is tricky with array repeat of structs sometimes or just to be safe
-    next_free: 1,
 };
 
 pub fn init() {
@@ -123,17 +122,17 @@ pub fn init() {
         (*gdt) = GlobalDescriptorTable::new();
 
         // Index 1: Kernel Code
-        let code_selector = (*gdt).add_entry(Descriptor::kernel_code_segment());
-        assert_eq!(code_selector, KCODE_SELECTOR);
+        let code_selector =
+            (*gdt).set_entry(KCODE_SELECTOR_INDEX, Descriptor::kernel_code_segment());
         // Index 2: Kernel Data
-        let data_selector = (*gdt).add_entry(Descriptor::kernel_data_segment());
-        assert_eq!(data_selector, KDATA_SELECTOR);
+        let data_selector =
+            (*gdt).set_entry(KDATA_SELECTOR_INDEX, Descriptor::kernel_data_segment());
         // Index 3: User Code
-        let ucode_selector = (*gdt).add_entry(Descriptor::user_code_segment()) | 3;
-        assert_eq!(ucode_selector, UCODE_SELECTOR);
+        let ucode_selector =
+            (*gdt).set_entry(UCODE_SELECTOR_INDEX, Descriptor::user_code_segment()) | 3;
         // Index 4: User Data
-        let udata_selector = (*gdt).add_entry(Descriptor::user_data_segment()) | 3;
-        assert_eq!(udata_selector, UDATA_SELECTOR);
+        let udata_selector =
+            (*gdt).set_entry(UDATA_SELECTOR_INDEX, Descriptor::user_data_segment()) | 3;
 
         (*gdt).load();
 
