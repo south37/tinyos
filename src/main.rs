@@ -66,6 +66,8 @@ pub extern "C" fn kmain() -> ! {
     // Load page table. Switch cr3.
     kvm.load();
     uart_println!("Page table loaded");
+
+    // Test paging
     unsafe {
         test_paging();
     }
@@ -93,7 +95,7 @@ fn make_linear(kvm: &mut vm::Kvm, allocator: &mut Allocator) {
         vm::PageTableEntry::WRITABLE,
     );
     if !r {
-        uart_println!("Linear map 1 failed");
+        uart_println!("Linear map [0, 0 + 1GiB) failed");
     }
     // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
     let r = kvm.map(
@@ -104,7 +106,7 @@ fn make_linear(kvm: &mut vm::Kvm, allocator: &mut Allocator) {
         vm::PageTableEntry::WRITABLE,
     );
     if !r {
-        uart_println!("Linear map 2 failed");
+        uart_println!("Linear map [KERNBASE, KERNBASE + 1GiB) failed");
     }
     // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
     let r = kvm.map(
@@ -117,7 +119,7 @@ fn make_linear(kvm: &mut vm::Kvm, allocator: &mut Allocator) {
             | vm::PageTableEntry::CACHE_DISABLE,
     );
     if !r {
-        uart_println!("Linear map 3 failed");
+        uart_println!("Linear map [DEVBASE, DEVBASE + 512MiB) failed");
     }
 }
 
