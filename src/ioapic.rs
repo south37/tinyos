@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use crate::uart_println;
+use crate::util::IOAPIC_ADDR;
 
 const T_IRQ0: u32 = 32;
 
@@ -11,8 +12,8 @@ const REG_TABLE: u32 = 0x10;
 const IOREGSEL: usize = 0x00;
 const IOWIN: usize = 0x10;
 
-pub unsafe fn init() {
-    let ioapic_addr = crate::util::DEVBASE + (crate::util::IOAPIC - crate::util::DEVSPACE);
+pub fn init() {
+    let ioapic_addr = crate::util::io2v(IOAPIC_ADDR);
     uart_println!("IOAPIC address: {:x}", ioapic_addr);
 
     // Get max entries from version register

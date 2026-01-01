@@ -4,6 +4,7 @@
 mod allocator;
 mod gdt;
 mod ioapic;
+mod lapic;
 mod uart;
 mod util;
 mod vm;
@@ -57,9 +58,10 @@ pub extern "C" fn kmain() -> ! {
     gdt::init();
     uart_println!("GDT loaded");
 
-    unsafe {
-        ioapic::init();
-    }
+    lapic::init();
+    uart_println!("LAPIC initialized");
+
+    ioapic::init();
     uart_println!("IOAPIC initialized");
 
     // Debug
