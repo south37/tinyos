@@ -2,22 +2,69 @@ use crate::allocator::Allocator;
 use crate::uart_println;
 use crate::util::{PG_SIZE, p2v, v2p};
 
+pub fn init(allocator: &mut Allocator) -> Kvm {
+    let mut kvm = Kvm::new();
+    kvm.init(allocator);
+
+    map_kernel(&mut kvm, allocator);
+
+    kvm.load();
+
+    kvm
+}
+
+fn map_kernel(kvm: &mut Kvm, allocator: &mut Allocator) {
+    // Linear map. Virtual: [0, 0 + 1GiB) -> Physical: [0, 1GiB)
+    let r = kvm.map(
+        allocator,
+        0,
+        0,
+        0x40000000, // 1GiB
+        PageTableEntry::WRITABLE,
+    );
+    if !r {
+        uart_println!("Linear map [0, 0 + 1GiB) failed");
+    }
+    // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
+    let r = kvm.map(
+        allocator,
+        crate::util::KERNBASE as u64,
+        0,
+        0x40000000, // 1GiB
+        PageTableEntry::WRITABLE,
+    );
+    if !r {
+        uart_println!("Linear map [KERNBASE, KERNBASE + 1GiB) failed");
+    }
+    // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
+    let r = kvm.map(
+        allocator,
+        crate::util::DEVBASE as u64,
+        crate::util::DEVSPACE as u64,
+        0x20000000, // 512MiB
+        PageTableEntry::WRITABLE | PageTableEntry::WRITE_THROUGH | PageTableEntry::CACHE_DISABLE,
+    );
+    if !r {
+        uart_println!("Linear map [DEVBASE, DEVBASE + 512MiB) failed");
+    }
+}
+
 const PG_SIZE_2M: u64 = 0x200000;
 
 // Kernel virtual memory
 pub struct Kvm {
-    root: *mut PageTable,
+    kpml4: *mut PageTable,
 }
 
 impl Kvm {
     pub fn new() -> Self {
         Self {
-            root: core::ptr::null_mut(),
+            kpml4: core::ptr::null_mut(),
         }
     }
 
     pub fn init(&mut self, allocator: &mut Allocator) {
-        self.root = allocator.kalloc() as *mut PageTable;
+        self.kpml4 = allocator.kalloc() as *mut PageTable;
     }
 
     pub fn map(&mut self, allocator: &mut Allocator, va: u64, pa: u64, sz: u64, perm: u64) -> bool {
@@ -68,7 +115,7 @@ impl Kvm {
         alloc: bool,
         target_level: u8,
     ) -> Option<&mut PageTableEntry> {
-        let mut table = self.root;
+        let mut table = self.kpml4;
 
         // Level 4, 3, 2
         for level in (1..4).rev() {
@@ -104,7 +151,7 @@ impl Kvm {
 
     pub fn load(&self) {
         unsafe {
-            core::arch::asm!("mov cr3, {}", in(reg) v2p(self.root as usize));
+            core::arch::asm!("mov cr3, {}", in(reg) v2p(self.kpml4 as usize));
         }
     }
 }
