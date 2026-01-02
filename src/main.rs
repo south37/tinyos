@@ -42,7 +42,7 @@ pub extern "C" fn kmain() -> ! {
     debug_freelist(&mut kernel.allocator);
 
     // Kernel virtual memory
-    let kvm = vm::init(&mut kernel.allocator);
+    let _kvm = vm::init(&mut kernel.allocator);
     uart_println!("Page table loaded");
 
     // Test paging
@@ -84,44 +84,6 @@ pub extern "C" fn kmain() -> ! {
 fn debug_freelist(allocator: &mut Allocator) {
     let addr = allocator.freelist as *const u8 as usize;
     uart_println!("freelist: 0x{:x}", addr);
-}
-
-fn make_linear(kvm: &mut vm::Kvm, allocator: &mut Allocator) {
-    // Linear map. Virtual: [0, 0 + 1GiB) -> Physical: [0, 1GiB)
-    let r = kvm.map(
-        allocator,
-        0,
-        0,
-        0x40000000, // 1GiB
-        vm::PageTableEntry::WRITABLE,
-    );
-    if !r {
-        uart_println!("Linear map [0, 0 + 1GiB) failed");
-    }
-    // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
-    let r = kvm.map(
-        allocator,
-        KERNBASE as u64,
-        0,
-        0x40000000, // 1GiB
-        vm::PageTableEntry::WRITABLE,
-    );
-    if !r {
-        uart_println!("Linear map [KERNBASE, KERNBASE + 1GiB) failed");
-    }
-    // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
-    let r = kvm.map(
-        allocator,
-        DEVBASE as u64,
-        DEVSPACE as u64,
-        0x20000000, // 512MiB
-        vm::PageTableEntry::WRITABLE
-            | vm::PageTableEntry::WRITE_THROUGH
-            | vm::PageTableEntry::CACHE_DISABLE,
-    );
-    if !r {
-        uart_println!("Linear map [DEVBASE, DEVBASE + 512MiB) failed");
-    }
 }
 
 struct Kernel {

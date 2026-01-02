@@ -68,85 +68,7 @@ impl Kvm {
     }
 
     pub fn map(&mut self, allocator: &mut Allocator, va: u64, pa: u64, sz: u64, perm: u64) -> bool {
-        let mut addr = pgrounddown(va);
-        let end = pgrounddown(va + sz - 1);
-        let mut pa = pa;
-
-        while addr <= end {
-            // Check if we can map a 2MB page
-            let use_2m = (addr % PG_SIZE_2M == 0)
-                && (pa % PG_SIZE_2M == 0)
-                && (addr + PG_SIZE_2M <= end + PG_SIZE as u64);
-
-            let level = if use_2m { 1 } else { 0 };
-
-            let pte = self.walk(allocator, addr, true, level);
-            if pte.is_none() {
-                uart_println!("Failed to map address: {:x}", addr);
-                return false;
-            }
-            let pte = pte.unwrap();
-            if pte.is_present() {
-                uart_println!("Address {:x} already mapped", addr);
-                return false;
-            }
-
-            let mut flags = perm | PageTableEntry::PRESENT;
-            if use_2m {
-                flags |= PageTableEntry::HUGE_PAGE;
-            }
-            *pte = PageTableEntry::new(pa, flags);
-
-            if use_2m {
-                addr += PG_SIZE_2M;
-                pa += PG_SIZE_2M;
-            } else {
-                addr += PG_SIZE as u64;
-                pa += PG_SIZE as u64;
-            }
-        }
-        true
-    }
-
-    fn walk(
-        &mut self,
-        allocator: &mut Allocator,
-        va: u64,
-        alloc: bool,
-        target_level: u8,
-    ) -> Option<&mut PageTableEntry> {
-        let mut table = self.kpml4;
-
-        // Level 4, 3, 2
-        for level in (1..4).rev() {
-            if level <= target_level {
-                break;
-            }
-            let idx = (va >> (12 + 9 * level)) & 0x1FF;
-            let pte = unsafe { &mut (*table).entries[idx as usize] };
-
-            if pte.is_present() {
-                table = p2v(pte.addr() as usize) as *mut PageTable;
-            } else {
-                if !alloc {
-                    return None;
-                }
-                let new_table = allocator.kalloc() as *mut PageTable;
-                if new_table.is_null() {
-                    return None;
-                }
-                let pa = v2p(new_table as usize) as u64;
-                *pte = PageTableEntry::new(
-                    pa,
-                    PageTableEntry::PRESENT | PageTableEntry::WRITABLE | PageTableEntry::USER,
-                );
-                table = new_table;
-            }
-        }
-
-        let shift = 12 + 9 * target_level;
-        let idx = (va >> shift) & 0x1FF;
-        unsafe { Some(&mut (*table).entries[idx as usize]) }
+        map_pages(self.kpml4, allocator, va, pa, sz, perm)
     }
 
     pub fn load(&self) {
@@ -154,6 +76,133 @@ impl Kvm {
             core::arch::asm!("mov cr3, {}", in(reg) v2p(self.kpml4 as usize));
         }
     }
+}
+
+pub fn uvm_create(allocator: &mut Allocator) -> Option<*mut PageTable> {
+    let pgdir = allocator.kalloc() as *mut PageTable;
+    if pgdir.is_null() {
+        return None;
+    }
+
+    // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
+    if !map_pages(
+        pgdir,
+        allocator,
+        crate::util::KERNBASE as u64,
+        0,
+        0x40000000,
+        PageTableEntry::WRITABLE,
+    ) {
+        return None;
+    }
+    // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
+    if !map_pages(
+        pgdir,
+        allocator,
+        crate::util::DEVBASE as u64,
+        crate::util::DEVSPACE as u64,
+        0x20000000,
+        PageTableEntry::WRITABLE | PageTableEntry::WRITE_THROUGH | PageTableEntry::CACHE_DISABLE,
+    ) {
+        return None;
+    }
+
+    Some(pgdir)
+}
+
+pub fn uvm_switch(pgdir: *mut PageTable) {
+    unsafe {
+        core::arch::asm!("mov cr3, {}", in(reg) v2p(pgdir as usize));
+    }
+}
+
+pub fn map_pages(
+    pgdir: *mut PageTable,
+    allocator: &mut Allocator,
+    va: u64,
+    pa: u64,
+    sz: u64,
+    perm: u64,
+) -> bool {
+    let mut addr = pgrounddown(va);
+    let end = pgrounddown(va + sz - 1);
+    let mut pa = pa;
+
+    while addr <= end {
+        // Check if we can map a 2MB page
+        let use_2m = (addr % PG_SIZE_2M == 0)
+            && (pa % PG_SIZE_2M == 0)
+            && (addr + PG_SIZE_2M <= end + PG_SIZE as u64);
+
+        let level = if use_2m { 1 } else { 0 };
+
+        let pte = walk(pgdir, allocator, addr, true, level);
+        if pte.is_none() {
+            uart_println!("Failed to map address: {:x}", addr);
+            return false;
+        }
+        let pte = pte.unwrap();
+        if pte.is_present() {
+            uart_println!("Address {:x} already mapped", addr);
+            return false;
+        }
+
+        let mut flags = perm | PageTableEntry::PRESENT;
+        if use_2m {
+            flags |= PageTableEntry::HUGE_PAGE;
+        }
+        *pte = PageTableEntry::new(pa, flags);
+
+        if use_2m {
+            addr += PG_SIZE_2M;
+            pa += PG_SIZE_2M;
+        } else {
+            addr += PG_SIZE as u64;
+            pa += PG_SIZE as u64;
+        }
+    }
+    true
+}
+
+fn walk(
+    pgdir: *mut PageTable,
+    allocator: &mut Allocator,
+    va: u64,
+    alloc: bool,
+    target_level: u8,
+) -> Option<&'static mut PageTableEntry> {
+    let mut table = pgdir;
+
+    // Level 4, 3, 2
+    for level in (1..4).rev() {
+        if level <= target_level {
+            break;
+        }
+        let idx = (va >> (12 + 9 * level)) & 0x1FF;
+        let pte = unsafe { &mut (*table).entries[idx as usize] };
+
+        if pte.is_present() {
+            table = p2v(pte.addr() as usize) as *mut PageTable;
+        } else {
+            if !alloc {
+                return None;
+            }
+            let new_table = allocator.kalloc() as *mut PageTable;
+            if new_table.is_null() {
+                return None;
+            }
+            let pa = v2p(new_table as usize) as u64;
+            *pte = PageTableEntry::new(
+                pa,
+                PageTableEntry::PRESENT | PageTableEntry::WRITABLE | PageTableEntry::USER,
+            );
+            table = new_table;
+        }
+    }
+
+    let shift = 12 + 9 * target_level;
+    let idx = (va >> shift) & 0x1FF;
+    unsafe { Some(&mut (*table).entries[idx as usize]) }
 }
 
 #[repr(C, align(4096))]

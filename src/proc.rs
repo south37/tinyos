@@ -3,6 +3,7 @@
 use crate::allocator::Allocator;
 use crate::uart_println;
 use crate::util::PG_SIZE;
+use crate::vm::{self, PageTable, PageTableEntry};
 use core::arch::global_asm;
 
 pub const NPROC: usize = 64;
@@ -35,6 +36,7 @@ pub struct Process {
     pub state: ProcessState,
     pub kstack: *mut u8,
     pub context: *mut Context,
+    pub pgdir: *mut PageTable,
     pub pid: usize,
     pub name: [u8; 16],
 }
@@ -45,6 +47,7 @@ impl Process {
             state: ProcessState::UNUSED,
             kstack: core::ptr::null_mut(),
             context: core::ptr::null_mut(),
+            pgdir: core::ptr::null_mut(),
             pid: 0,
             name: [0; 16],
         }
@@ -100,6 +103,9 @@ pub fn init_process(allocator: &mut Allocator) {
         }
         p.state = ProcessState::EMBRYO;
 
+        // Allocation User Page Table
+        p.pgdir = vm::uvm_create(allocator).expect("uvm_create failed");
+
         // Allocate kernel stack
         p.kstack = allocator.kalloc();
         if p.kstack.is_null() {
@@ -114,9 +120,29 @@ pub fn init_process(allocator: &mut Allocator) {
         let context_addr = sp - core::mem::size_of::<Context>();
         p.context = context_addr as *mut Context;
 
-        // Set rip to a simple function for now
+        // Init code (jmp $)
+        // 0xEB 0xFE
+        let initcode: [u8; 2] = [0xeb, 0xfe];
+        let mem = allocator.kalloc();
+        if mem.is_null() {
+            panic!("init_process: kalloc failed");
+        }
         unsafe {
-            (*p.context).rip = init_code as *const () as usize as u64;
+            core::ptr::copy_nonoverlapping(initcode.as_ptr(), mem, initcode.len());
+        }
+        // Map init code at 0
+        vm::map_pages(
+            p.pgdir,
+            allocator,
+            0,
+            crate::util::v2p(mem as usize) as u64,
+            PG_SIZE as u64,
+            PageTableEntry::WRITABLE | PageTableEntry::USER,
+        );
+
+        // Set rip to 0 (where we mapped the code)
+        unsafe {
+            (*p.context).rip = 0;
             (*p.context).r15 = 0;
             (*p.context).r14 = 0;
             (*p.context).r13 = 0;
@@ -133,16 +159,6 @@ pub fn init_process(allocator: &mut Allocator) {
     }
 }
 
-#[unsafe(no_mangle)]
-fn init_code() {
-    loop {
-        // simple delay loop
-        for _ in 0..10000000 {
-            unsafe { core::arch::asm!("nop") };
-        }
-    }
-}
-
 // Scheduler context (per-cpu). For now just a static variable?
 // Since we are single core and running on kstack of current process or scheduler loop.
 // We need a place to save the scheduler's own context when we switch TO a process.
@@ -156,6 +172,9 @@ pub fn scheduler() {
             for p in PROCS.iter_mut() {
                 if p.state == ProcessState::RUNNABLE {
                     p.state = ProcessState::RUNNING;
+
+                    // Switch to user page table
+                    vm::uvm_switch(p.pgdir);
 
                     // Switch to process
                     swtch(core::ptr::addr_of_mut!(SCHEDULER_CONTEXT), p.context);
