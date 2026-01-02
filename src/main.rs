@@ -58,9 +58,7 @@ pub extern "C" fn kmain() -> ! {
     }
 
     // Init allocator again
-    kernel
-        .allocator
-        .init(p2v(4 * 1024 * 1024), p2v(128 * 1024 * 1024));
+    kernel.allocator.init(p2v(4 * 1024 * 1024), p2v(PHYS_MEM));
 
     gdt::init();
     uart_println!("GDT loaded");

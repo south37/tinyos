@@ -72,7 +72,7 @@ pub fn init() {
 pub fn eoi() {
     let lapic = crate::util::io2v(LAPIC_ADDR);
     unsafe {
-        write(lapic, EOI, 0);
+        core::ptr::write_volatile((lapic + EOI as usize) as *mut u32, 0);
     }
 }
 

@@ -5,6 +5,8 @@ pub const DEVSPACE: usize = 0xFE000000; // First device physical address
 pub const IOAPIC_ADDR: usize = 0xFEC00000;
 pub const LAPIC_ADDR: usize = 0xFEE00000;
 
+pub const PHYS_MEM: usize = 256 * 1024 * 1024; // 256MB
+
 pub const PG_SIZE: usize = 4096;
 
 pub fn p2v(x: usize) -> usize {
