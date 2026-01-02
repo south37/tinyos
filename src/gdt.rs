@@ -220,7 +220,6 @@ unsafe fn reload_segments(code_selector: u16, data_selector: u16) {
         );
     }
 }
-// ... (existing code)
 
 pub unsafe fn set_kernel_stack(stack: u64) {
     unsafe {
