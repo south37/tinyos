@@ -66,8 +66,6 @@ pub extern "C" fn kmain() -> ! {
 
     proc::scheduler();
 
-    // Debug
-    debug_freelist(&mut allocator);
     loop {
         unsafe {
             core::arch::asm!("hlt");
@@ -83,10 +81,5 @@ fn debug_freelist(allocator: &mut Allocator) {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     uart_println!("panicked: {}", info.message());
-    loop {}
-}
-
-fn panic_loop(message: &str) -> ! {
-    uart_println!("panicked: {}", message);
     loop {}
 }
