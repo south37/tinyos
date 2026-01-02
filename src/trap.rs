@@ -94,6 +94,8 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
         n if n == (T_IRQ0 + IRQ_TIMER) as u64 => {
             // Ack LAPIC
             crate::lapic::eoi();
+            // Debug
+            // uart_println!("Timer");
         }
         n if n == T_SYSCALL as u64 => {
             uart_println!("Syscall");

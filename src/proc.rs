@@ -59,6 +59,8 @@ unsafe extern "C" {
 }
 
 // Save callee-saved registers and switch stack
+// rdi -> old context
+// rsi -> new context
 global_asm!(
     ".global swtch",
     "swtch:",
@@ -170,10 +172,10 @@ pub fn scheduler() {
             }
         }
         if !ran_process {
-            // Enable interrupts to allow IRQs to wake us up?
-            // unsafe { core::arch::asm!("sti") };
+            // Enable interrupts to allow IRQs to wake us up
+            unsafe { core::arch::asm!("sti") };
             // Wait for interrupt
-            // unsafe { core::arch::asm!("hlt") };
+            unsafe { core::arch::asm!("hlt") };
         }
     }
 }
