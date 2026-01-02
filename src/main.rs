@@ -42,7 +42,7 @@ pub extern "C" fn kmain() -> ! {
     debug_freelist(&mut kernel.allocator);
 
     // Kernel virtual memory
-    let _kvm = vm::init(&mut kernel.allocator);
+    vm::init(&mut kernel.allocator);
     uart_println!("Page table loaded");
 
     // Test paging

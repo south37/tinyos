@@ -175,7 +175,7 @@ pub fn scheduler() {
                     p.state = ProcessState::RUNNING;
 
                     // Switch to user page table
-                    vm::uvm_switch(p.pgdir);
+                    vm::switch(p.pgdir);
 
                     // Set Kernel Stack in TSS
                     let kstack_top = p.kstack as usize + KSTACK_SIZE;

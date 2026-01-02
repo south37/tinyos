@@ -2,20 +2,20 @@ use crate::allocator::Allocator;
 use crate::uart_println;
 use crate::util::{PG_SIZE, p2v, v2p};
 
-pub fn init(allocator: &mut Allocator) -> Kvm {
-    let mut kvm = Kvm::new();
-    kvm.init(allocator);
-
-    map_kernel(&mut kvm, allocator);
-
-    kvm.load();
-
-    kvm
+pub fn init(allocator: &mut Allocator) {
+    let pgdir = kvm_create(allocator).expect("kvm_create failed");
+    switch(pgdir);
 }
 
-fn map_kernel(kvm: &mut Kvm, allocator: &mut Allocator) {
+pub fn kvm_create(allocator: &mut Allocator) -> Option<*mut PageTable> {
+    let pgdir = allocator.kalloc() as *mut PageTable;
+    if pgdir.is_null() {
+        return None;
+    }
+
     // Linear map. Virtual: [0, 0 + 1GiB) -> Physical: [0, 1GiB)
-    let r = kvm.map(
+    let r = map_pages(
+        pgdir,
         allocator,
         0,
         0,
@@ -24,9 +24,19 @@ fn map_kernel(kvm: &mut Kvm, allocator: &mut Allocator) {
     );
     if !r {
         uart_println!("Linear map [0, 0 + 1GiB) failed");
+        return None;
     }
+    if !map_highmem(pgdir, allocator) {
+        return None;
+    }
+
+    Some(pgdir)
+}
+
+fn map_highmem(pgdir: *mut PageTable, allocator: &mut Allocator) -> bool {
     // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
-    let r = kvm.map(
+    let r = map_pages(
+        pgdir,
         allocator,
         crate::util::KERNBASE as u64,
         0,
@@ -35,9 +45,11 @@ fn map_kernel(kvm: &mut Kvm, allocator: &mut Allocator) {
     );
     if !r {
         uart_println!("Linear map [KERNBASE, KERNBASE + 1GiB) failed");
+        return false;
     }
     // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
-    let r = kvm.map(
+    let r = map_pages(
+        pgdir,
         allocator,
         crate::util::DEVBASE as u64,
         crate::util::DEVSPACE as u64,
@@ -46,37 +58,12 @@ fn map_kernel(kvm: &mut Kvm, allocator: &mut Allocator) {
     );
     if !r {
         uart_println!("Linear map [DEVBASE, DEVBASE + 512MiB) failed");
+        return false;
     }
+    true
 }
 
 const PG_SIZE_2M: u64 = 0x200000;
-
-// Kernel virtual memory
-pub struct Kvm {
-    kpml4: *mut PageTable,
-}
-
-impl Kvm {
-    pub fn new() -> Self {
-        Self {
-            kpml4: core::ptr::null_mut(),
-        }
-    }
-
-    pub fn init(&mut self, allocator: &mut Allocator) {
-        self.kpml4 = allocator.kalloc() as *mut PageTable;
-    }
-
-    pub fn map(&mut self, allocator: &mut Allocator, va: u64, pa: u64, sz: u64, perm: u64) -> bool {
-        map_pages(self.kpml4, allocator, va, pa, sz, perm)
-    }
-
-    pub fn load(&self) {
-        unsafe {
-            core::arch::asm!("mov cr3, {}", in(reg) v2p(self.kpml4 as usize));
-        }
-    }
-}
 
 pub fn uvm_create(allocator: &mut Allocator) -> Option<*mut PageTable> {
     let pgdir = allocator.kalloc() as *mut PageTable;
@@ -84,33 +71,15 @@ pub fn uvm_create(allocator: &mut Allocator) -> Option<*mut PageTable> {
         return None;
     }
 
-    // Linear map. Virtual: [KERNBASE, KERNBASE + 1GiB) -> Physical: [0, 1GiB)
-    if !map_pages(
-        pgdir,
-        allocator,
-        crate::util::KERNBASE as u64,
-        0,
-        0x40000000,
-        PageTableEntry::WRITABLE,
-    ) {
-        return None;
-    }
-    // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
-    if !map_pages(
-        pgdir,
-        allocator,
-        crate::util::DEVBASE as u64,
-        crate::util::DEVSPACE as u64,
-        0x20000000,
-        PageTableEntry::WRITABLE | PageTableEntry::WRITE_THROUGH | PageTableEntry::CACHE_DISABLE,
-    ) {
+    // Only map high memory
+    if !map_highmem(pgdir, allocator) {
         return None;
     }
 
     Some(pgdir)
 }
 
-pub fn uvm_switch(pgdir: *mut PageTable) {
+pub fn switch(pgdir: *mut PageTable) {
     unsafe {
         core::arch::asm!("mov cr3, {}", in(reg) v2p(pgdir as usize));
     }
