@@ -33,6 +33,8 @@ alltraps:
     push %rax
     mov %rsp, %rdi // Pass TrapFrame
     call trap_handler
+    .global trapret
+trapret:
     // Restore registers
     pop %rax
     pop %rbx

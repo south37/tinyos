@@ -1,6 +1,8 @@
 #![allow(static_mut_refs)]
 
 use crate::allocator::Allocator;
+use crate::gdt::{UCODE_SELECTOR, UDATA_SELECTOR};
+use crate::trap::TrapFrame;
 use crate::uart_println;
 use crate::util::PG_SIZE;
 use crate::vm::{self, PageTable, PageTableEntry};
@@ -59,6 +61,7 @@ static mut PID_COUNTER: usize = 0;
 
 unsafe extern "C" {
     fn swtch(old: *mut *mut Context, new: *mut Context);
+    fn trapret();
 }
 
 // Save callee-saved registers and switch stack
@@ -113,13 +116,6 @@ pub fn init_process(allocator: &mut Allocator) {
             return;
         }
 
-        let sp = p.kstack as usize + KSTACK_SIZE;
-
-        // Setup context
-        // Leave space for Context struct on stack
-        let context_addr = sp - core::mem::size_of::<Context>();
-        p.context = context_addr as *mut Context;
-
         // Init code (jmp $)
         // int 0x40; jmp $
         // 0xCD 0x40 0xEB 0xFE
@@ -141,9 +137,29 @@ pub fn init_process(allocator: &mut Allocator) {
             PageTableEntry::WRITABLE | PageTableEntry::USER,
         );
 
-        // Set rip to 0 (where we mapped the code)
+        let sp = p.kstack as usize + KSTACK_SIZE;
+
+        // Setup context
+        // Reserve space for TrapFrame
+        let tf_addr = sp - core::mem::size_of::<TrapFrame>();
+        let tf = tf_addr as *mut TrapFrame;
+
+        // Set up TrapFrame
         unsafe {
-            (*p.context).rip = 0;
+            (*tf).cs = UCODE_SELECTOR as u64;
+            (*tf).ss = UDATA_SELECTOR as u64;
+            (*tf).rsp = PG_SIZE as u64; // User stack at top of page
+            (*tf).rflags = 0x202; // IF | Reserved
+            (*tf).rip = 0; // Entry point
+        }
+
+        // Reserve space for Context below TrapFrame
+        let context_addr = tf_addr - core::mem::size_of::<Context>();
+        p.context = context_addr as *mut Context;
+
+        // Set context to return to trapret
+        unsafe {
+            (*p.context).rip = trapret as *const () as usize as u64;
             (*p.context).r15 = 0;
             (*p.context).r14 = 0;
             (*p.context).r13 = 0;
