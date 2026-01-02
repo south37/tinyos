@@ -121,8 +121,9 @@ pub fn init_process(allocator: &mut Allocator) {
         p.context = context_addr as *mut Context;
 
         // Init code (jmp $)
-        // 0xEB 0xFE
-        let initcode: [u8; 2] = [0xeb, 0xfe];
+        // int 0x40; jmp $
+        // 0xCD 0x40 0xEB 0xFE
+        let initcode: [u8; 4] = [0xcd, 0x40, 0xeb, 0xfe];
         let mem = allocator.kalloc();
         if mem.is_null() {
             panic!("init_process: kalloc failed");
@@ -175,6 +176,10 @@ pub fn scheduler() {
 
                     // Switch to user page table
                     vm::uvm_switch(p.pgdir);
+
+                    // Set Kernel Stack in TSS
+                    let kstack_top = p.kstack as usize + KSTACK_SIZE;
+                    crate::gdt::set_kernel_stack(kstack_top as u64);
 
                     // Switch to process
                     swtch(core::ptr::addr_of_mut!(SCHEDULER_CONTEXT), p.context);
