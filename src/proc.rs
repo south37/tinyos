@@ -40,6 +40,7 @@ pub struct Process {
     pub context: *mut Context,
     pub pgdir: *mut PageTable,
     pub pid: usize,
+    pub chan: usize,
     pub name: [u8; 16],
 }
 
@@ -51,6 +52,7 @@ impl Process {
             context: core::ptr::null_mut(),
             pgdir: core::ptr::null_mut(),
             pid: 0,
+            chan: 0,
             name: [0; 16],
         }
     }
@@ -58,6 +60,31 @@ impl Process {
 
 pub static mut PROCS: [Process; NPROC] = [Process::new(); NPROC];
 static mut PID_COUNTER: usize = 0;
+pub static mut CURRENT_PROCESS: Option<&mut Process> = None;
+
+pub fn sleep(chan: usize) {
+    unsafe {
+        if let Some(p) = CURRENT_PROCESS.as_deref_mut() {
+            p.chan = chan;
+            p.state = ProcessState::SLEEPING;
+        }
+        // Swtch needs scheduler context.
+        if let Some(p) = CURRENT_PROCESS.as_mut() {
+            swtch(&mut p.context as *mut _, SCHEDULER_CONTEXT);
+        }
+    }
+}
+
+pub fn wakeup(chan: usize) {
+    unsafe {
+        for p in PROCS.iter_mut() {
+            if p.state == ProcessState::SLEEPING && p.chan == chan {
+                p.state = ProcessState::RUNNABLE;
+                p.chan = 0;
+            }
+        }
+    }
+}
 
 unsafe extern "C" {
     fn swtch(old: *mut *mut Context, new: *mut Context);
@@ -186,27 +213,27 @@ pub fn scheduler() {
     loop {
         let mut ran_process = false;
         unsafe {
-            for p in PROCS.iter_mut() {
+            for i in 0..NPROC {
+                let p = &mut PROCS[i];
                 if p.state == ProcessState::RUNNABLE {
                     p.state = ProcessState::RUNNING;
 
+                    CURRENT_PROCESS = Some(p);
+
                     // Switch to user page table
-                    vm::switch(p.pgdir);
+                    let p_ptr = CURRENT_PROCESS.as_mut().unwrap();
+                    vm::switch(p_ptr.pgdir);
 
                     // Set Kernel Stack in TSS
-                    let kstack_top = p.kstack as usize + KSTACK_SIZE;
+                    let kstack_top = p_ptr.kstack as usize + KSTACK_SIZE;
                     crate::gdt::set_kernel_stack(kstack_top as u64);
 
                     // Switch to process
-                    swtch(core::ptr::addr_of_mut!(SCHEDULER_CONTEXT), p.context);
+                    swtch(core::ptr::addr_of_mut!(SCHEDULER_CONTEXT), p_ptr.context);
 
-                    // Process yielded or was preempted (returns here)
-                    // Currently our init_code loops forever, so it won't return unless we setup interrupts
-                    // and yield.
+                    // Back from process
+                    CURRENT_PROCESS = None;
 
-                    // We assume p.context was updated by swtch (saved there)
-
-                    p.state = ProcessState::RUNNABLE;
                     ran_process = true;
                 }
             }

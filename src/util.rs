@@ -25,6 +25,7 @@ pub const T_SYSCALL: u32 = 64; // system call
 
 pub const T_IRQ0: u32 = 32;
 pub const IRQ_TIMER: u32 = 0;
+pub const IRQ_VIRTIO: u32 = 11;
 pub const IRQ_ERROR: u32 = 19;
 
 pub unsafe fn stosq(addr: *mut u64, val: u64, count: usize) {

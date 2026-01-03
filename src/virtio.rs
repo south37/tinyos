@@ -2,7 +2,7 @@ use crate::allocator::Allocator;
 use crate::pci::PciDevice;
 use crate::uart_println;
 use crate::util::{PG_SIZE, v2p};
-use crate::util::{inl, inw, outb, outl, outw};
+use crate::util::{inb, inl, inw, outb, outl, outw};
 use core::mem::size_of;
 use core::ptr::{addr_of, addr_of_mut};
 
@@ -19,6 +19,7 @@ const VIRTIO_REG_QUEUE_SIZE: u16 = 12;
 const VIRTIO_REG_QUEUE_SELECT: u16 = 14;
 const VIRTIO_REG_QUEUE_NOTIFY: u16 = 16;
 const VIRTIO_REG_DEVICE_STATUS: u16 = 18;
+const VIRTIO_REG_ISR_STATUS: u16 = 19;
 
 // Status Bits
 const VIRTIO_STATUS_ACKNOWLEDGE: u8 = 1;
@@ -66,6 +67,7 @@ struct VirtioBlkOutHeader {
 }
 
 static mut VIRTIO_BLK_DRIVER: Option<VirtioDriver> = None;
+static mut VIRTIO_IO_BASE: u16 = 0;
 
 struct VirtioDriver {
     io_base: u16,
@@ -76,12 +78,24 @@ struct VirtioDriver {
     used_idx: u16,
 }
 
+pub unsafe fn intr() {
+    let io_base = unsafe { VIRTIO_IO_BASE };
+    if io_base != 0 {
+        let status = unsafe { inb(io_base + VIRTIO_REG_ISR_STATUS) };
+        if status & 1 != 0 || status & 3 != 0 {
+            // Wakeup waiting process
+            unsafe { crate::proc::wakeup(addr_of!(VIRTIO_BLK_DRIVER) as usize) };
+        }
+    }
+}
+
 pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     if unsafe { (*addr_of!(VIRTIO_BLK_DRIVER)).is_some() } {
         return;
     }
 
     let io_base = dev.base_addr as u16;
+    unsafe { VIRTIO_IO_BASE = io_base };
     uart_println!("Virtio: io_base={:x}", io_base);
 
     // 1. Reset device
@@ -103,8 +117,6 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
 
     // Check if device supports large enough queue
     if q_size < QUEUE_SIZE {
-        // Warning: if device is smaller than our compiled size, we might overflow.
-        // But for now assuming QEMU gives 256.
         uart_println!(
             "Virtio: Warning device queue size {} < compiled {}",
             q_size,
@@ -113,9 +125,6 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     }
 
     // Allocate 3 contiguous pages manually
-    // Desc (16*256=4096 = 1 page)
-    // Avail (starts at 4096)
-    // Used (starts at 8192 aligned)
     let p1 = allocator.kalloc();
     let p2 = allocator.kalloc();
     let p3 = allocator.kalloc();
@@ -154,13 +163,6 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     );
     unsafe { outl(io_base + VIRTIO_REG_QUEUE_ADDR, (paddr_pages as u32) >> 12) };
 
-    // With 256 entries:
-    // Desc starts at base (0)
-    // Avail starts at base + 4096 (16*256)
-    // Used starts at aligned 4096 boundary after Avail.
-    // Avail size: 4 + 2 + 2*256 + 2 = 520 bytes.
-    // Avail ends at 4096 + 520 = 4616.
-    // Next 4096 boundary is 8192.
     let desc_ptr = base_addr as *mut VRingDesc;
     let avail_ptr = unsafe { base_addr.add(4096) } as *mut VRingAvail;
     let used_ptr = unsafe { base_addr.add(8192) } as *mut VRingUsed;
@@ -270,20 +272,22 @@ impl VirtioDriver {
         outw(self.io_base + VIRTIO_REG_QUEUE_NOTIFY, 0);
 
         let used = self.queue_used;
-        // Simple polling wait
-        let mut spin_count = 0;
-        while (*used).idx == self.used_idx {
-            core::arch::asm!("pause");
-            let _ = core::ptr::read_volatile(&(*used).idx);
-            spin_count += 1;
-            if spin_count > 10000000 {
-                uart_println!(
-                    "Virtio: Timeout waiting for interrupt/used buffer update. used.idx={}",
-                    (*used).idx
-                );
+
+        loop {
+            let val = core::ptr::read_volatile(&(*used).idx);
+            if val != self.used_idx {
                 break;
             }
+            // Check if CURRENT_PROCESS is some (non-null) without creating ref.
+            // Option<Box<T>> is guaranteed to be 0 for None.
+            let proc_ptr = addr_of!(crate::proc::CURRENT_PROCESS) as *const usize;
+            if unsafe { *proc_ptr != 0 } {
+                crate::proc::sleep(addr_of!(VIRTIO_BLK_DRIVER) as usize);
+            } else {
+                core::arch::asm!("pause");
+            }
         }
+
         self.used_idx = self.used_idx.wrapping_add(1);
 
         if status != 0 {

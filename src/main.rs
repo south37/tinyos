@@ -64,9 +64,18 @@ pub extern "C" fn kmain() -> ! {
     let device = pci::scan_pci(virtio::VIRTIO_LEGACY_DEVICE_ID);
     if let Some(dev) = device {
         uart_println!("Device found, initializing virtio (legacy)...");
+        // Initialize Virtio
         unsafe {
             virtio::init(&dev, &mut allocator);
         }
+
+        // Enable Virtio IRQ (11) on CPU 0
+        unsafe {
+            ioapic::enable(IRQ_VIRTIO, 0);
+        }
+
+        // Enable Interrupts
+        unsafe { core::arch::asm!("sti") };
 
         // Test Read/Write
         let mut buf = [0u8; 512];

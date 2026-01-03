@@ -29,6 +29,17 @@ pub fn init() {
     }
 }
 
+pub unsafe fn enable(irq: u32, cpu_id: u32) {
+    let ioapic_addr = crate::util::io2v(IOAPIC_ADDR);
+    // For now assuming CPU 0 or broadcast.
+    // Write low 32 bits: vector = T_IRQ0 + irq, Mask = 0 (enabled).
+    write(ioapic_addr, REG_TABLE + 2 * irq, T_IRQ0 + irq);
+
+    // Write high 32 bits: destination APIC ID.
+    // cpu_id << 24.
+    write(ioapic_addr, REG_TABLE + 2 * irq + 1, cpu_id << 24);
+}
+
 unsafe fn read(base: usize, reg: u32) -> u32 {
     unsafe {
         core::ptr::write_volatile((base + IOREGSEL) as *mut u32, reg);
