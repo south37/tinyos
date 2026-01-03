@@ -90,13 +90,40 @@ pub extern "C" fn kmain() -> ! {
 
         // Verify Root Inode
         {
-            let ip = fs::iget(1, fs::ROOTINO);
+            let ip = fs::iget(1, fs::ROOT_INO);
             let guard = ip.ilock();
+            let mode = guard.i_mode;
+            let nlink = guard.i_links_count;
+            let size = guard.i_size;
             uart_println!("Root Inode:");
-            uart_println!("  type: {}", guard.type_);
-            uart_println!("  nlink: {}", guard.nlink);
-            uart_println!("  size: {}", guard.size);
+            uart_println!("  mode: {:x}", mode);
+            uart_println!("  nlinks: {}", nlink);
+            uart_println!("  size: {}", size);
             // guard is dropped here, unlocking inode.
+        }
+
+        // Read 'hello.txt' file
+        {
+            let root = fs::iget(1, fs::ROOT_INO);
+            if let Some(inum) = fs::dirlookup(root, "hello.txt") {
+                uart_println!("Found 'hello.txt' inode: {}", inum);
+                let ip = fs::iget(1, inum);
+                let mut buf = [0u8; 128];
+                let n = fs::readi(ip, buf.as_mut_ptr(), 0, 128);
+                if n > 0 {
+                    let len = if n as usize > buf.len() {
+                        buf.len()
+                    } else {
+                        n as usize
+                    };
+                    let s = core::str::from_utf8(&buf[0..len]).unwrap_or("invalid utf8");
+                    uart_println!("Content: {}", s);
+                } else {
+                    uart_println!("Read 0 bytes");
+                }
+            } else {
+                uart_println!("'hello' not found in root");
+            }
         }
     }
 
