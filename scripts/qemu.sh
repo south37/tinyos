@@ -16,8 +16,14 @@ for arg in "$@"; do
     esac
 done
 
+if [ ! -f disk.img ]; then
+    qemu-img create -f raw disk.img 128M
+fi
+
 qemu-system-x86_64 \
   -kernel ./target/x86_64-unknown-none/release/tinyos \
   -d int,mmu,guest_errors \
   -D qemu.log \
+  -drive file=disk.img,if=none,format=raw,id=x0 \
+  -device virtio-blk-pci,drive=x0,bus=pci.0,addr=0x3 \
   $QEMUOPTS

@@ -1,6 +1,7 @@
 # Build
 /target
 *.o
+*.img
 
 # Dev
 *.swp
