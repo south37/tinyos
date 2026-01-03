@@ -66,93 +66,6 @@ pub fn binit() {
 // Read a block into buffer
 pub fn bread(dev: u32, blockno: u32) -> usize {
     let b = bget(dev, blockno);
-    {
-        let mut bcache = BCACHE.lock();
-        if !bcache.bufs[b].valid {
-            // Drop lock to read?
-            // virtio::read_block sleeps, so we MUST drop spinlock.
-            // But if we drop spinlock, someone else might use the buffer?
-            // buf needs a sleep-lock (busy flag).
-            // For now, xv6-style: buffer is locked by bget.
-            // But we don't have sleep-lock yet.
-            // Let's just hold the lock for now? No, sleep inside spinlock bad.
-            // We need to implement proper sleep-lock pattern.
-
-            // For simplicity in this step: READ synchronously while holding lock?
-            // virtio::read_block sleeps, which switches process.
-            // Interrupts come in.
-            // If we hold spinlock (with interrupts disabled), sleep is meaningless/deadlock.
-            // virtio::read_block re-enables interrupts by sleep() -> swtch().
-
-            // CRITICAL: We cannot hold Spinlock while calling virtio::read_block.
-            // bget returns a "locked" buffer (semantics).
-            // We need to release BCACHE lock but keep BUFFER locked.
-            // Since we implemented naive Spinlock, we don't have per-buffer locks yet.
-
-            // Simplification: Just read synchronously.
-            // But virtio requires sleep.
-
-            // Solution:
-            // 1. Acquire BCACHE.
-            // 2. Find buffer. Mark 'locked/busy' in flags.
-            // 3. Release BCACHE.
-            // 4. Do IO.
-            // 5. Acquire BCACHE. Mark valid.
-            // 6. Return buffer index.
-
-            // Wait, bget already does logic.
-            // Let's implement minimal bread that does IO.
-        }
-    }
-    // Perform IO if not valid
-    // This part is tricky without full lock infrastructure.
-    // Let's assume for this step, we just read.
-    // To make this safe, we really need a Lock on the Buf or similar.
-    // Let's use `refcnt` as a lock for now?
-    // refcnt > 0 means it's in use.
-
-    let mut buf_data = [0u8; BSIZE];
-
-    // COPYING STRATEGY for simplicity (Buffer Cache is just a cache, we copy out?)
-    // No, we want zero-copy reference usually.
-    // But returning &Buf is hard with Spinlock.
-    // Returning index is easier.
-
-    // REAL implementation needs sleep-locks.
-    // I will implement a placeholder that reads every time for now,
-    // bypassing cache logic to prove FS works, OR implement full cache.
-    // Let's try full cache with "busy" bit.
-
-    // For now, assume bget returned a buffer we own (refcnt incremented).
-    // We check valid bit.
-
-    // Note: This needs access to internal data.
-    // Let's create a temporary simpler implementation that effectively bypasses cache for reads
-    // but uses structure, until we harden locks.
-    // Actually, `virtio` is fast. Maybe we can rely on that?
-    // No, we need cache for inodes.
-
-    // Let's assume single process for now during fs dev (init).
-    let mut bcache = BCACHE.lock();
-    if !bcache.bufs[b].valid {
-        // Read from disk
-        // We must release lock to do IO?
-        // This assumes we have exclusive access to this buf (bget ensures).
-    }
-    drop(bcache);
-
-    // If not valid, read.
-    // To read safely, we need mutable access.
-    // But `bufs` is in `BCACHE`.
-    // We need `BCACHE` lock to write to `bufs[b].data`.
-
-    // Workaround: We define `read` to take a buffer?
-    // Let's make `bread` read into `bufs[b].data`.
-
-    // Since we are single threaded mostly (just kthread + init),
-    // we can cheat:
-    // Hold lock, check valid. If not, drop lock, read local buf, take lock, copy to buf, set valid.
-
     let mut do_read = false;
     {
         let cache = BCACHE.lock();
@@ -162,9 +75,14 @@ pub fn bread(dev: u32, blockno: u32) -> usize {
     }
 
     if do_read {
+        let mut buf_data = [0u8; BSIZE];
+        // virtio block driver uses 512 byte sectors, but we use 1024 byte blocks, so
+        // we need to specify `blockno * 2` as sector number. Note that the buffer
+        // size can be larger than 512 bytes.
         virtio::read_block(blockno as u64 * 2, &mut buf_data);
+
         let mut cache = BCACHE.lock();
-        cache.bufs[b].data = buf_data;
+        cache.bufs[b].data.copy_from_slice(&buf_data);
         cache.bufs[b].valid = true;
     }
 
@@ -186,7 +104,6 @@ pub fn bwrite(b: usize) {
 pub fn brelse(b: usize) {
     let mut cache = BCACHE.lock();
     cache.bufs[b].refcnt -= 1;
-    // Move to head of LRU if refcnt == 0?
 }
 
 pub fn bget(dev: u32, blockno: u32) -> usize {
@@ -200,8 +117,7 @@ pub fn bget(dev: u32, blockno: u32) -> usize {
         }
     }
 
-    // 2. Alloc new (LRU) - Scan backwards from head?
-    // Naive: Find first refcnt==0.
+    // 2. Alloc new
     for i in 0..NBUF {
         if cache.bufs[i].refcnt == 0 {
             cache.bufs[i].dev = dev;
