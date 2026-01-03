@@ -61,9 +61,9 @@ pub extern "C" fn kmain() -> ! {
     proc::init_process(&mut allocator);
     uart_println!("Init process initialized");
 
-    let device = pci::scan_pci();
+    let device = pci::scan_pci(virtio::VIRTIO_LEGACY_DEVICE_ID);
     if let Some(dev) = device {
-        uart_println!("Device found, initializing virtio...");
+        uart_println!("Device found, initializing virtio (legacy)...");
         unsafe {
             virtio::init(&dev, &mut allocator);
         }
@@ -71,8 +71,13 @@ pub extern "C" fn kmain() -> ! {
         // Test Read/Write
         let mut buf = [0u8; 512];
         virtio::read_block(0, &mut buf);
-        uart_println!("Read block 0");
-        // Check magic? disk.img is empty (zeros).
+        uart_println!(
+            "Read back block 0: {:x} {:x} {:x} {:x}",
+            buf[0],
+            buf[1],
+            buf[2],
+            buf[3]
+        );
 
         // Write something
         buf[0] = 0xDE;

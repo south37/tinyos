@@ -6,6 +6,8 @@ use crate::util::{inl, inw, outb, outl, outw};
 use core::mem::size_of;
 use core::ptr::{addr_of, addr_of_mut};
 
+pub const VIRTIO_LEGACY_DEVICE_ID: u16 = 0x1001;
+
 const VIRTIO_BLK_T_IN: u32 = 0;
 const VIRTIO_BLK_T_OUT: u32 = 1;
 
@@ -123,10 +125,9 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
         return;
     }
 
-    // Sort/Find Base
-    // We need 3 pages contiguous.
-    // alloc goes high-to-low.
-    let mut pages = [p3 as usize, p2 as usize, p1 as usize];
+    // Find Base.
+    // We need 3 pages contiguous. kalloc goes high-to-low.
+    let pages = [p3 as usize, p2 as usize, p1 as usize];
 
     if pages[1] != pages[0] + PG_SIZE || pages[2] != pages[1] + PG_SIZE {
         uart_println!(

@@ -70,7 +70,7 @@ pub unsafe fn check_device(bus: u8, slot: u8) -> Option<PciDevice> {
     None
 }
 
-pub fn scan_pci() -> Option<PciDevice> {
+pub fn scan_pci(device_id: u16) -> Option<PciDevice> {
     for bus in 0..256 {
         for slot in 0..32 {
             // Only checking function 0 for simplicity.
@@ -88,9 +88,7 @@ pub fn scan_pci() -> Option<PciDevice> {
                     );
 
                     // Look for Virtio Block Device
-                    // Legacy: 0x1001
-                    // Modern/Transitional Block: 0x1042
-                    if dev.device_id == 0x1001 || dev.device_id == 0x1042 {
+                    if dev.device_id == device_id {
                         return Some(dev);
                     }
                 }
