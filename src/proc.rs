@@ -62,12 +62,20 @@ pub static mut PROCS: [Process; NPROC] = [Process::new(); NPROC];
 static mut PID_COUNTER: usize = 0;
 pub static mut CURRENT_PROCESS: Option<&mut Process> = None;
 
-pub fn sleep(chan: usize) {
+use crate::spinlock::SpinlockGuard;
+
+pub fn sleep<T>(chan: usize, guard: Option<SpinlockGuard<T>>) {
     unsafe {
         if let Some(p) = CURRENT_PROCESS.as_deref_mut() {
             p.chan = chan;
             p.state = ProcessState::SLEEPING;
         }
+
+        // Release lock if provided
+        if let Some(g) = guard {
+            drop(g);
+        }
+
         // Swtch needs scheduler context.
         if let Some(p) = CURRENT_PROCESS.as_mut() {
             swtch(&mut p.context as *mut _, SCHEDULER_CONTEXT);

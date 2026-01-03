@@ -278,11 +278,13 @@ impl VirtioDriver {
             if val != self.used_idx {
                 break;
             }
-            // Check if CURRENT_PROCESS is some (non-null) without creating ref.
             // Option<Box<T>> is guaranteed to be 0 for None.
             let proc_ptr = addr_of!(crate::proc::CURRENT_PROCESS) as *const usize;
             if unsafe { *proc_ptr != 0 } {
-                crate::proc::sleep(addr_of!(VIRTIO_BLK_DRIVER) as usize);
+                crate::proc::sleep(
+                    addr_of!(VIRTIO_BLK_DRIVER) as usize,
+                    None::<crate::spinlock::SpinlockGuard<()>>,
+                );
             } else {
                 core::arch::asm!("pause");
             }

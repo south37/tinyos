@@ -2,11 +2,15 @@
 #![no_main]
 
 mod allocator;
+mod bio;
+mod fs;
 mod gdt;
 mod ioapic;
 mod lapic;
 mod pci;
 mod proc;
+mod sleeplock;
+mod spinlock;
 mod trap;
 mod uart;
 mod util;
@@ -58,6 +62,9 @@ pub extern "C" fn kmain() -> ! {
     trap::init();
     uart_println!("Traps initialized");
 
+    bio::binit();
+    uart_println!("Buffer cache initialized");
+
     proc::init_process(&mut allocator);
     uart_println!("Init process initialized");
 
@@ -77,40 +84,19 @@ pub extern "C" fn kmain() -> ! {
         // Enable Interrupts
         unsafe { core::arch::asm!("sti") };
 
-        // Test Read/Write
-        let mut buf = [0u8; 512];
-        virtio::read_block(0, &mut buf);
-        uart_println!(
-            "Read back block 0: {:x} {:x} {:x} {:x}",
-            buf[0],
-            buf[1],
-            buf[2],
-            buf[3]
-        );
+        // Initialize Filesystem
+        fs::fsinit(1);
+        uart_println!("Filesystem initialized");
 
-        // Write something
-        buf[0] = 0xDE;
-        buf[1] = 0xAD;
-        buf[2] = 0xBE;
-        buf[3] = 0xEF;
-        virtio::write_block(0, &buf); // sector 0
-        uart_println!("Wrote block 0");
-
-        // Read back
-        let mut buf2 = [0u8; 512];
-        virtio::read_block(0, &mut buf2);
-        uart_println!(
-            "Read back block 0: {:x} {:x} {:x} {:x}",
-            buf2[0],
-            buf2[1],
-            buf2[2],
-            buf2[3]
-        );
-
-        if buf2[0] == 0xDE && buf2[1] == 0xAD && buf2[2] == 0xBE && buf2[3] == 0xEF {
-            uart_println!("Virtio test PASSED");
-        } else {
-            uart_println!("Virtio test FAILED");
+        // Verify Root Inode
+        {
+            let ip = fs::iget(1, fs::ROOTINO);
+            let guard = ip.ilock();
+            uart_println!("Root Inode:");
+            uart_println!("  type: {}", guard.type_);
+            uart_println!("  nlink: {}", guard.nlink);
+            uart_println!("  size: {}", guard.size);
+            // guard is dropped here, unlocking inode.
         }
     }
 
