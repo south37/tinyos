@@ -141,8 +141,8 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     let base_addr = pages[0] as *mut u8;
 
     // Zero out
-    for i in 0..(PG_SIZE * 3) {
-        unsafe { *base_addr.add(i) = 0 };
+    unsafe {
+        crate::util::stosq(base_addr as *mut u64, 0, PG_SIZE * 3 / 8);
     }
 
     let paddr_pages = v2p(base_addr as usize);
