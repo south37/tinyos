@@ -1,15 +1,20 @@
+# Trap handler vectors. Use altmacro to generate multiple handlers.
+# HANDLER_ERR is for exceptions with error codes.
+# HANDLER is for exceptions without error codes.
+
 .altmacro
-.macro HANDLER num
-.global vector\num
-vector\num:
-    push $0     # error code
-    push $\num  # trap number
-    jmp alltraps
-.endm
 
 .macro HANDLER_ERR num
 .global vector\num
 vector\num:
+    push $\num  # trap number
+    jmp alltraps
+.endm
+
+.macro HANDLER num
+.global vector\num
+vector\num:
+    push $0     # error code
     push $\num  # trap number
     jmp alltraps
 .endm
@@ -72,6 +77,7 @@ trapret:
 .quad vector\num
 .endm
 
+# Trap handler vector table.
 .section .data
 .global vectors
 vectors:

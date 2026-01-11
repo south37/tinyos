@@ -85,6 +85,7 @@ static mut IDT: [GateDesc; 256] = [GateDesc {
 }; 256];
 
 unsafe extern "C" {
+    // Trap handler vector table. Defined in asm/vectors.S.
     static vectors: [u64; 256];
 }
 
