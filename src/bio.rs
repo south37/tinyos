@@ -31,6 +31,7 @@ impl Buf {
     }
 }
 
+// Buffer cache
 pub struct Bcache {
     pub bufs: [Buf; NBUF],
     pub head: usize, // Index of head of LRU list

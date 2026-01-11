@@ -245,7 +245,7 @@ impl Inode {
             let gdt = GDT.lock();
             let inode_table_block = gdt[group as usize].bg_inode_table;
 
-            let inode_size = if sb.s_rev_level == 0 { 128 } else { 128 };
+            let inode_size = 128;
 
             let offset_in_table = index * inode_size;
             let block_offset = offset_in_table / BSIZE as u32;
@@ -287,7 +287,7 @@ pub fn readi(ip: &Inode, dst: *mut u8, off: u32, n: u32) -> u32 {
     let mut dst_ptr = dst;
 
     while m > 0 {
-        let b = bmap(&guard, offset / BSIZE as u32);
+        let b = bmap(&guard, offset / BSIZE as u32, ip.dev);
         if b == 0 {
             break;
         }
@@ -313,29 +313,30 @@ pub fn readi(ip: &Inode, dst: *mut u8, off: u32, n: u32) -> u32 {
 // Return the disk block address of the nth block in inode.
 // Returns 0 if no block allocated.
 // Supports Direct blocks (0-11) and Singly Indirect (12).
-fn bmap(ip: &DiskInode, bn: u32) -> u32 {
+fn bmap(ip: &DiskInode, bn: u32, dev: u32) -> u32 {
+    let mut bn = bn;
     if bn < EXT2_NDIR_BLOCKS as u32 {
         return ip.i_block[bn as usize];
     }
 
     // Simplified Indirect support (Singular only for now)
-    let bn = bn - EXT2_NDIR_BLOCKS as u32;
+    bn -= EXT2_NDIR_BLOCKS as u32;
     if bn < (BSIZE / 4) as u32 {
         let addr = ip.i_block[EXT2_IND_BLOCK];
         if addr == 0 {
             return 0;
         }
         // Read indirect block
-        // Note: we can't easily read block without device?
-        // Wait, bmap usually needs device to read indirect block.
-        // But DiskInode doesn't know device.
-        // We need 'dev' argument in bmap.
-        // But here I passed &DiskInode only.
-        // I need to change signature or read from cache if possible?
-        // I need 'dev'.
-        // Let's return 0 for now for indirect, assuming verification file is small (<12KB).
-        // "Hello Ext2" file is tiny.
-        return 0;
+        let buf_idx = crate::bio::bread(dev, addr);
+        let blk_addr: u32;
+        {
+            let cache = crate::bio::BCACHE.lock();
+            let buf = &cache.bufs[buf_idx];
+            let ptr = buf.data.as_ptr() as *const u32;
+            blk_addr = unsafe { core::ptr::read(ptr.add(bn as usize)) };
+        }
+        crate::bio::brelse(buf_idx);
+        return blk_addr;
     }
 
     0
