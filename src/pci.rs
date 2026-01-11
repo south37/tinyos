@@ -78,7 +78,7 @@ pub fn scan_pci(device_id: u16) -> Option<PciDevice> {
             unsafe {
                 if let Some(dev) = check_device(bus as u8, slot as u8) {
                     uart_println!(
-                        "PCI: {:02x}:{:02x}.0 Vendor={:04x} Device={:04x} BAR0={:x} IRQ={}",
+                        "INFO: PCI: {:02x}:{:02x}.0 Vendor={:04x} Device={:04x} BAR0={:x} IRQ={}",
                         dev.bus,
                         dev.slot,
                         dev.vendor_id,

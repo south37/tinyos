@@ -34,9 +34,9 @@ fn kernel_range() -> (usize, usize) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kmain() -> ! {
-    uart_println!("Hello, world!");
+    uart_println!("Hello from tinyos!");
     uart_println!(
-        "kernel range: {:x} - {:x}",
+        "INFO: kernel range: {:x} - {:x}",
         kernel_range().0,
         kernel_range().1
     );
@@ -143,7 +143,7 @@ pub extern "C" fn kmain() -> ! {
 
 fn debug_freelist(allocator: &mut Allocator) {
     let addr = allocator.freelist as *const u8 as usize;
-    uart_println!("freelist: 0x{:x}", addr);
+    uart_println!("DEBUG: freelist: 0x{:x}", addr);
 }
 
 #[panic_handler]

@@ -12,12 +12,12 @@ const IOWIN: usize = 0x10;
 
 pub fn init() {
     let ioapic_addr = crate::util::io2v(IOAPIC_ADDR);
-    uart_println!("IOAPIC address: {:x}", ioapic_addr);
+    uart_println!("INFO: IOAPIC address: {:x}", ioapic_addr);
 
     // Get max entries from version register
     let ver = unsafe { read(ioapic_addr, REG_VER) };
     let maxintr = (ver >> 16) & 0xFF;
-    uart_println!("IOAPIC max entries: {}", maxintr);
+    uart_println!("INFO: IOAPIC max entries: {}", maxintr);
 
     // Mark all interrupts edge-triggered, active high, disabled,
     // and not routed to any CPUs.
