@@ -48,29 +48,29 @@ pub extern "C" fn kmain() -> ! {
     debug_freelist(&mut allocator);
 
     vm::init(&mut allocator);
-    uart_println!("Page table loaded");
+    uart_println!("INFO: Page table loaded");
 
     gdt::init();
-    uart_println!("GDT loaded");
+    uart_println!("INFO: GDT loaded");
 
     lapic::init();
-    uart_println!("LAPIC initialized");
+    uart_println!("INFO: LAPIC initialized");
 
     ioapic::init();
-    uart_println!("IOAPIC initialized");
+    uart_println!("INFO: IOAPIC initialized");
 
     trap::init();
-    uart_println!("Traps initialized");
+    uart_println!("INFO: Traps initialized");
 
     bio::binit();
-    uart_println!("Buffer cache initialized");
+    uart_println!("INFO: Buffer cache initialized");
 
     proc::init_process(&mut allocator);
-    uart_println!("Init process initialized");
+    uart_println!("INFO: Init process initialized");
 
     let device = pci::scan_pci(virtio::VIRTIO_LEGACY_DEVICE_ID);
     if let Some(dev) = device {
-        uart_println!("Device found, initializing virtio (legacy)...");
+        uart_println!("INFO: Device found, initializing virtio (legacy)...");
         // Initialize Virtio
         unsafe {
             virtio::init(&dev, &mut allocator);
@@ -86,7 +86,7 @@ pub extern "C" fn kmain() -> ! {
 
         // Initialize Filesystem
         fs::fsinit(1);
-        uart_println!("Filesystem initialized");
+        uart_println!("INFO: Filesystem initialized");
 
         // Verify Root Inode
         {
@@ -95,7 +95,7 @@ pub extern "C" fn kmain() -> ! {
             let mode = guard.i_mode;
             let nlink = guard.i_links_count;
             let size = guard.i_size;
-            uart_println!("Root Inode:");
+            uart_println!("DEBUG: Root Inode:");
             uart_println!("  mode: {:x}", mode);
             uart_println!("  nlinks: {}", nlink);
             uart_println!("  size: {}", size);
@@ -106,7 +106,7 @@ pub extern "C" fn kmain() -> ! {
         {
             let root = fs::iget(1, fs::ROOT_INO);
             if let Some(inum) = fs::dirlookup(root, "hello.txt") {
-                uart_println!("Found 'hello.txt' inode: {}", inum);
+                uart_println!("DEBUG: Found 'hello.txt' inode: {}", inum);
                 let ip = fs::iget(1, inum);
                 let mut buf = [0u8; 128];
                 let n = fs::readi(ip, buf.as_mut_ptr(), 0, 128);
@@ -117,12 +117,12 @@ pub extern "C" fn kmain() -> ! {
                         n as usize
                     };
                     let s = core::str::from_utf8(&buf[0..len]).unwrap_or("invalid utf8");
-                    uart_println!("Content: {}", s);
+                    uart_println!("DEBUG: Content: {}", s);
                 } else {
-                    uart_println!("Read 0 bytes");
+                    uart_println!("DEBUG: Read 0 bytes");
                 }
             } else {
-                uart_println!("'hello' not found in root");
+                uart_println!("ERROR: 'hello.txt' not found in root");
             }
         }
     }

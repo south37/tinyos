@@ -371,7 +371,7 @@ pub fn dirlookup(dir: &Inode, name: &str) -> Option<u32> {
                 let name_ptr = unsafe { ptr.add(core::mem::size_of::<DirEntry>()) };
                 let name_slice = unsafe { core::slice::from_raw_parts(name_ptr, name_len) };
                 let s = core::str::from_utf8(name_slice).unwrap_or("?");
-                crate::uart_println!("dir scan: name='{}', inode={}", s, de.inode);
+                crate::uart_println!("DEBUG: dir scan: name='{}', inode={}", s, de.inode);
 
                 if name.len() == name_len && name.as_bytes() == name_slice {
                     return Some(de.inode);
