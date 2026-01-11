@@ -352,18 +352,6 @@ pub fn dirlookup(dir: &Inode, name: &str) -> Option<u32> {
     let mut off = 0;
     let mut buf = [0u8; BSIZE];
 
-    // Temporarily unlock to call readi?
-    // readi locks internally.
-    // Recursive lock? SleepLock is reentrant?
-    // SleepLock is NOT reentrant usually.
-    // If readi calls ilock(), it will deadlock if we hold lock.
-    // So readi handles locking. We should drop guard before calling readi or use a version that takes guard.
-    // But bmap needs guard.
-    // readi implementation above takes &Inode and locks.
-
-    // We need a readi_locked or similar.
-    // Or just manually read here.
-
     drop(guard); // Unlock to use readi
 
     loop {
