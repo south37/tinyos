@@ -215,7 +215,7 @@ pub fn init_process(allocator: &mut Allocator) {
 static mut SCHEDULER_CONTEXT: *mut Context = core::ptr::null_mut();
 
 pub fn scheduler() {
-    uart_println!("Scheduler starting...");
+    uart_println!("INFO: Scheduler starting...");
     loop {
         let mut ran_process = false;
         unsafe {
