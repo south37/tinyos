@@ -6,12 +6,14 @@ vector\num:
     push $\num // trap number
     jmp alltraps
 .endm
+
 .macro HANDLER_ERR num
 .global vector\num
 vector\num:
     push $\num // trap number
     jmp alltraps
 .endm
+
 .section .text
 .global alltraps
 alltraps:

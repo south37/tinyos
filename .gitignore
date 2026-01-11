@@ -3,6 +3,8 @@
 *.o
 *.img
 build
+asm/initcode
+asm/initcode.out
 
 # Dev
 *.swp

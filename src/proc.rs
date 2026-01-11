@@ -154,7 +154,7 @@ pub fn init_process(allocator: &mut Allocator) {
         // Init code (jmp $)
         // int 0x40; jmp $
         // 0xCD 0x40 0xEB 0xFE
-        let initcode: [u8; 4] = [0xcd, 0x40, 0xeb, 0xfe];
+        let initcode: &[u8] = include_bytes!("../asm/initcode");
         let mem = allocator.kalloc();
         if mem.is_null() {
             panic!("init_process: kalloc failed");
