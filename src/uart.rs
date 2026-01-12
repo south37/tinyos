@@ -1,3 +1,4 @@
+use crate::util::{inb, outb};
 use core::fmt;
 
 const COM1: u16 = 0x3F8;
@@ -34,24 +35,6 @@ pub fn uart_getc() -> Option<u8> {
 // Interrupt handler
 pub fn uartintr() {
     crate::console::consoleintr(uart_getc);
-}
-
-unsafe fn outb(port: u16, val: u8) {
-    core::arch::asm!(
-        "out dx, al",
-        in("dx") port,
-        in("al") val,
-    );
-}
-
-unsafe fn inb(port: u16) -> u8 {
-    let ret: u8;
-    core::arch::asm!(
-        "in al, dx",
-        out("al") ret,
-        in("dx") port,
-    );
-    ret
 }
 
 use crate::spinlock::Spinlock;
