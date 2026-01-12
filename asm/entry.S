@@ -13,12 +13,6 @@ mboot_header:
     .long mboot_bss_end
     .long mboot_entry_addr
 
-# kernel code segment
-#define SEG_KCODE 1
-
-# EFER(Extended Feature Enable Register)
-#define EFER_MSR 0xC0000080
-
 # First kernel virtual address
 #define KERNBASE 0xFFFFFFFF80000000
 
@@ -83,7 +77,7 @@ ptbl_loop:
     mov    %eax, %cr4
 
     # LME (Long Mode Enable) - EFER.LME=1
-    mov    $EFER_MSR, %ecx
+    mov    $0xC0000080, %ecx
     rdmsr
     bts    $8, %eax
     wrmsr
@@ -94,7 +88,7 @@ ptbl_loop:
     mov    %eax, %cr0
 
     # shift to 64bit segment
-    ljmp   $(SEG_KCODE<<3), $(entry64low - KERNBASE)
+    ljmp   $8, $(entry64low - KERNBASE)
 
 # GDT for 64-bit code. Only code seg (no data seg).
 .p2align 4               # force 16 byte alignment

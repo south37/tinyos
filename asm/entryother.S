@@ -51,11 +51,7 @@ start32:
     orl     $0x80000000, %eax
     movl    %eax, %cr0
 
-    # Load 64-bit GDT?
-    # We can reuse the same GDT if it has 64-bit descriptors.
-    # But checking gdtdesc, I need a 64-bit code segment.
-    # Let's add one at offset 24 (0x18).
-
+    # Load 64-bit GDT
     ljmp    $24, $start64
 
 .code64
