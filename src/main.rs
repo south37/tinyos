@@ -68,6 +68,7 @@ pub extern "C" fn kmain() -> ! {
     uart_println!("INFO: GDT loaded");
 
     proc::init_cpus();
+    uart_println!("INFO: CPUs initialized");
 
     lapic::init();
     uart_println!("INFO: LAPIC initialized");

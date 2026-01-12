@@ -1,3 +1,5 @@
+use crate::proc::mycpu;
+use crate::util::readeflags;
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -24,8 +26,7 @@ impl<T> Spinlock<T> {
     }
 
     pub fn lock(&self) -> SpinlockGuard<T> {
-        // Disable interrupts to avoid deadlock with ISR
-        unsafe { core::arch::asm!("cli") };
+        push_cli(); // Disable interrupts to avoid deadlock
 
         while self
             .lock
@@ -64,10 +65,31 @@ impl<'a, T> DerefMut for SpinlockGuard<'a, T> {
 impl<'a, T> Drop for SpinlockGuard<'a, T> {
     fn drop(&mut self) {
         self.lock.lock.store(false, Ordering::Release);
-        // Re-enable interrupts?
-        // WARNING: This is simplistic. Nested locks or if interrupts were already disabled matter.
-        // For simple xv6-like OS, push/pop cli is better.
-        // But for now, we assume simple usage.
+        pop_cli();
+    }
+}
+
+pub fn push_cli() {
+    let flags = unsafe { readeflags() };
+    unsafe { core::arch::asm!("cli") };
+    let cpu = mycpu();
+    if cpu.ncli == 0 {
+        cpu.intena = (flags & 0x200) != 0;
+    }
+    cpu.ncli += 1;
+}
+
+pub fn pop_cli() {
+    let flags = unsafe { readeflags() };
+    if (flags & 0x200) != 0 {
+        panic!("pop_cli: interrupts enabled");
+    }
+    let cpu = mycpu();
+    if cpu.ncli == 0 {
+        panic!("pop_cli: unbalanced");
+    }
+    cpu.ncli -= 1;
+    if cpu.ncli == 0 && cpu.intena {
         unsafe { core::arch::asm!("sti") };
     }
 }

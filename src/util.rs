@@ -134,3 +134,11 @@ pub unsafe fn micro_delay(us: u64) {
         }
     }
 }
+
+pub unsafe fn readeflags() -> u64 {
+    let flags: u64;
+    unsafe {
+        core::arch::asm!("pushfq; pop {}", out(reg) flags);
+    }
+    flags
+}

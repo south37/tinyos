@@ -7,6 +7,7 @@ use crate::uart_println;
 use crate::util::PG_SIZE;
 use crate::vm::{self, PageTable, PageTableEntry};
 use core::arch::global_asm;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 pub const NPROC: usize = 64;
 pub const KSTACK_SIZE: usize = PG_SIZE;
@@ -91,16 +92,21 @@ impl Cpu {
 pub static mut CPUS: [Cpu; NCPU] = [Cpu::new(); NCPU];
 pub static mut PROCS: [Process; NPROC] = [Process::new(); NPROC];
 static mut PID_COUNTER: usize = 0;
+pub static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 pub fn init_cpus() {
     unsafe {
         for (i, cpu) in CPUS.iter_mut().enumerate() {
             cpu.lapicid = i as u32;
         }
+        INITIALIZED.store(true, Ordering::Release);
     }
 }
 
 pub fn mycpu() -> &'static mut Cpu {
+    if !INITIALIZED.load(Ordering::Acquire) {
+        return unsafe { &mut CPUS[0] };
+    }
     let apic_id = crate::lapic::id();
     unsafe {
         for cpu in CPUS.iter_mut() {
@@ -291,7 +297,6 @@ pub fn scheduler() {
         // Enable interrupts to allow IRQs to wake us up
         unsafe { core::arch::asm!("sti") };
 
-        let mut ran_process = false;
         unsafe {
             for i in 0..NPROC {
                 let p = &mut PROCS[i];
@@ -312,14 +317,9 @@ pub fn scheduler() {
 
                     // Back from process
                     cpu.process = None;
-
-                    ran_process = true;
                 }
             }
         }
-        // if !ran_process {
-        // unsafe { core::arch::asm!("hlt") };
-        // }
     }
 }
 
