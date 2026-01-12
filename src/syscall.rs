@@ -33,3 +33,74 @@ unsafe extern "C" {
     // Defined in asm/syscall.S
     fn syscall_entry();
 }
+
+use crate::proc::CURRENT_PROCESS;
+use crate::trap::TrapFrame;
+use crate::uart_println;
+
+pub const SYS_EXEC: u64 = 59; // Linux execve is 59
+
+pub fn syscall() {
+    #[allow(static_mut_refs)]
+    let p = unsafe { CURRENT_PROCESS.as_mut().unwrap() };
+    let tf = unsafe {
+        &mut *(((p.kstack as usize) + crate::proc::KSTACK_SIZE - core::mem::size_of::<TrapFrame>())
+            as *mut TrapFrame)
+    };
+
+    let num = tf.rax;
+    uart_println!("DEBUG: Syscall: {}", num);
+
+    let ret = match num {
+        SYS_EXEC => sys_exec(tf),
+        _ => {
+            uart_println!("Unknown syscall {}", num);
+            -1
+        }
+    };
+
+    tf.rax = ret as u64;
+}
+
+fn argstr(n: usize, tf: &TrapFrame) -> Result<&str, ()> {
+    // Fetch nth argument as string pointer
+    let ptr_val = match n {
+        0 => tf.rdi,
+        1 => tf.rsi,
+        2 => tf.rdx,
+        3 => tf.r10,
+        4 => tf.r8,
+        5 => tf.r9,
+        _ => return Err(()),
+    };
+
+    // Verify pointer (very basic verification)
+    if ptr_val == 0 {
+        return Err(());
+    }
+
+    // Find length
+    let mut len = 0;
+    loop {
+        let b = unsafe { *((ptr_val + len) as *const u8) };
+        if b == 0 {
+            break;
+        }
+        len += 1;
+        if len > 1024 {
+            return Err(());
+        } // Max string length
+    }
+
+    let slice = unsafe { core::slice::from_raw_parts(ptr_val as *const u8, len as usize) };
+    core::str::from_utf8(slice).map_err(|_| ())
+}
+
+fn sys_exec(tf: &TrapFrame) -> isize {
+    let path = match argstr(0, tf) {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    // Argv ignored for now
+    crate::exec::exec(path, &[])
+}

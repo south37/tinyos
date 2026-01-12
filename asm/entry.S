@@ -46,8 +46,8 @@ mboot_header:
 # Entry point of kernel
 .code32
 .section .text.entry
-.global entry
-entry:
+.global mboot_entry
+mboot_entry:
     # zero 4 pages for our bootstrap page tables
     xor    %eax, %eax
     mov    $PAGETABLE, %edi

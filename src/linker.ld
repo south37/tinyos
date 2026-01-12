@@ -51,4 +51,4 @@ mboot_flags = 0x00010000;
 mboot_checksum = 0xE4514FFE; /* -mboot_magic -mboot_flags */
 mboot_load_end = mboot_load_addr + (edata - __kernel_start);
 mboot_bss_end = mboot_load_addr + (__kernel_end - __kernel_start);
-mboot_entry_addr = mboot_load_addr + (entry - __kernel_start);
+mboot_entry_addr = mboot_load_addr + (mboot_entry - __kernel_start);

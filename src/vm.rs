@@ -133,7 +133,7 @@ pub fn map_pages(
     true
 }
 
-fn walk(
+pub fn walk(
     pgdir: *mut PageTable,
     allocator: &mut Allocator,
     va: u64,

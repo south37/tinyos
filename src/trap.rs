@@ -103,7 +103,8 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
             unsafe { crate::virtio::intr() };
         }
         n if n == T_SYSCALL as u64 => {
-            uart_println!("DEBUG: Syscall");
+            // uart_println!("DEBUG: Syscall");
+            crate::syscall::syscall();
         }
         _ => {
             uart_println!("Trap {}", tf.trap_num);

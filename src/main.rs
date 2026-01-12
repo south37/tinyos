@@ -1,8 +1,12 @@
 #![no_std]
 #![no_main]
+#![feature(abi_x86_interrupt)]
+#![feature(const_mut_refs)] // For static mut context
 
 mod allocator;
 mod bio;
+mod elf;
+mod exec;
 mod fs;
 mod gdt;
 mod ioapic;
@@ -42,13 +46,20 @@ pub extern "C" fn kmain() -> ! {
         kernel_range().1
     );
 
-    let mut allocator = Allocator::new();
-    allocator.init(kernel_range().1, p2v(PHYS_MEM));
+    crate::allocator::ALLOCATOR
+        .lock()
+        .init(kernel_range().1, p2v(PHYS_MEM));
 
     // Debug
-    debug_freelist(&mut allocator);
+    {
+        let mut allocator = crate::allocator::ALLOCATOR.lock();
+        debug_freelist(&mut allocator);
+    }
 
-    vm::init(&mut allocator);
+    {
+        let mut allocator = crate::allocator::ALLOCATOR.lock();
+        vm::init(&mut allocator);
+    }
     uart_println!("INFO: Page table loaded");
 
     gdt::init();
@@ -69,7 +80,10 @@ pub extern "C" fn kmain() -> ! {
     bio::binit();
     uart_println!("INFO: Buffer cache initialized");
 
-    proc::init_process(&mut allocator);
+    {
+        let mut allocator = crate::allocator::ALLOCATOR.lock();
+        proc::init_process(&mut allocator);
+    }
     uart_println!("INFO: Init process initialized");
 
     let device = pci::scan_pci(virtio::VIRTIO_LEGACY_DEVICE_ID);
@@ -77,6 +91,7 @@ pub extern "C" fn kmain() -> ! {
         uart_println!("INFO: Device found, initializing virtio (legacy)...");
         // Initialize Virtio
         unsafe {
+            let mut allocator = crate::allocator::ALLOCATOR.lock();
             virtio::init(&dev, &mut allocator);
         }
 
@@ -109,7 +124,7 @@ pub extern "C" fn kmain() -> ! {
         // Read 'hello.txt' file
         {
             let root = fs::iget(1, fs::ROOT_INO);
-            if let Some(inum) = fs::dirlookup(root, "hello.txt") {
+            if let Some(inum) = fs::dirlookup(root, "init") {
                 uart_println!("DEBUG: Found 'hello.txt' inode: {}", inum);
                 let ip = fs::iget(1, inum);
                 let mut buf = [0u8; 128];

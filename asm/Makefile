@@ -11,7 +11,7 @@ vectors.o: vectors.S
 
 initcode: initcode.S
 	cc -fno-pic -gdwarf-2 -m64 -mcmodel=kernel -mno-red-zone -c initcode.S -o initcode.o
-	ld -N -e start -Ttext 0 -o initcode.out initcode.o
+	ld -N -e _user_start -Ttext 0 -o initcode.out initcode.o
 	objcopy -S -O binary initcode.out initcode
 
 clean: 

@@ -5,6 +5,7 @@ set -eux
 # Create staging directory
 mkdir -p build/fs
 echo "Hello Ext2" > build/fs/hello.txt
+cp ./user/init build/fs/
 
 # Create disk.img (size 32M approx)
 # -d build/fs: populate with files from directory

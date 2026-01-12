@@ -1,5 +1,7 @@
 use crate::PG_SIZE;
 
+use crate::spinlock::Spinlock;
+
 pub struct Allocator {
     pub freelist: *const Run,
 }
@@ -8,8 +10,10 @@ pub struct Run {
     pub next: *const Run,
 }
 
+pub static ALLOCATOR: Spinlock<Allocator> = Spinlock::new(Allocator::new());
+
 impl Allocator {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             freelist: core::ptr::null(),
         }

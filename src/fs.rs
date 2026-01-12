@@ -164,6 +164,16 @@ pub fn fsinit(dev: u32) {
     crate::bio::brelse(b);
 
     if sb.s_magic != EXT2_MAGIC {
+        unsafe {
+            let ptr = &sb as *const SuperBlock as *const u8;
+            crate::uart_println!(
+                "DEBUG: SB bytes: {:x} {:x} {:x} {:x}",
+                *ptr,
+                *ptr.add(1),
+                *ptr.add(2),
+                *ptr.add(3)
+            );
+        }
         panic!("invalid ext2 filesystem magic: {:x}", sb.s_magic);
     }
 
@@ -387,4 +397,21 @@ pub fn dirlookup(dir: &Inode, name: &str) -> Option<u32> {
     }
 
     None
+}
+
+pub fn namei(path: &str) -> Option<&'static Inode> {
+    let mut ip = iget(1, ROOT_INO);
+
+    for name in path.split('/') {
+        if name.is_empty() {
+            continue;
+        }
+        match dirlookup(ip, name) {
+            Some(inum) => {
+                ip = iget(1, inum);
+            }
+            None => return None,
+        }
+    }
+    Some(ip)
 }
