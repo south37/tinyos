@@ -45,7 +45,7 @@ pub fn exec(path: &str, _argv: &[&str]) -> isize {
         core::mem::size_of::<ElfHeader>() as u32,
     );
     if sz != core::mem::size_of::<ElfHeader>() as u32 || elf.magic != ELF_MAGIC {
-        uart_println!("exec: bad elf header");
+        uart_println!("DEBUG: exec: bad elf header");
         return -1;
     }
 
