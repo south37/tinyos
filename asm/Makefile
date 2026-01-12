@@ -17,7 +17,7 @@ $(BUILD_DIR)/initcode: initcode.S | $(BUILD_DIR)
 	objcopy -S -O binary $(BUILD_DIR)/initcode.out $@
 
 $(BUILD_DIR)/entryother: entryother.S | $(BUILD_DIR)
-	cc -fno-pic -nostdinc -I. -c entryother.S -o $(BUILD_DIR)/entryother.o
+	cc -fno-pic -nostdinc -c entryother.S -o $(BUILD_DIR)/entryother.o
 	ld -N -e start -Ttext 0x7000 -o $(BUILD_DIR)/entryother.out $(BUILD_DIR)/entryother.o
 	objcopy -S -O binary $(BUILD_DIR)/entryother.out $@
 

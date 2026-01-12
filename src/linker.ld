@@ -1,11 +1,11 @@
 ENTRY(mboot_entry)
 
-mboot_load_addr = 0x00100000;
+mboot_load_addr = 0x100000;
 
 SECTIONS
 {
 	/* Link the kernel at this address: "." means the current address */
-	/* Must be equal to KERNLINK */
+	/* Must be equal to KERNBASE + mboot_load_addr */
 	. = 0xFFFFFFFF80100000; 
 
 	PROVIDE(__kernel_start = .);
