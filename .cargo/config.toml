@@ -7,5 +7,6 @@ rustflags = [
   "-C", "link-arg=-Tsrc/linker.ld",
   "-C", "link-arg=asm/entry.o",
   "-C", "link-arg=asm/vectors.o",
+  "-C", "link-arg=asm/syscall.o",
   "-C", "relocation-model=static",
 ]

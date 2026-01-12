@@ -1,5 +1,6 @@
 .global start
 start:
-  int $0x40
+  mov $64, %rax
+  syscall
 loop:
   jmp loop

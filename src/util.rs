@@ -1,3 +1,4 @@
+// Memory layout
 pub const KERNBASE: usize = 0xFFFFFFFF80000000; // First kernel virtual address
 pub const DEVBASE: usize = 0xFFFFFFFF40000000; // First device virtual address
 
@@ -21,12 +22,22 @@ pub fn io2v(x: usize) -> usize {
     x - DEVSPACE + DEVBASE
 }
 
+// Interrupts
 pub const T_SYSCALL: u32 = 64; // system call
-
 pub const T_IRQ0: u32 = 32;
 pub const IRQ_TIMER: u32 = 0;
 pub const IRQ_VIRTIO: u32 = 11;
 pub const IRQ_ERROR: u32 = 19;
+
+// MSRs
+pub const MSR_EFER: u32 = 0xC0000080;
+pub const MSR_STAR: u32 = 0xC0000081;
+pub const MSR_LSTAR: u32 = 0xC0000082;
+pub const MSR_SFMASK: u32 = 0xC0000084;
+pub const MSR_KERNEL_GS_BASE: u32 = 0xC0000102;
+
+// EFER
+pub const EFER_SCE: u64 = 1; // Syscall Extensions
 
 pub unsafe fn stosq(addr: *mut u64, val: u64, count: usize) {
     unsafe {
@@ -79,4 +90,31 @@ pub unsafe fn inl(port: u16) -> u32 {
         core::arch::asm!("in eax, dx", out("eax") ret, in("dx") port);
     }
     ret
+}
+
+pub unsafe fn wrmsr(msr: u32, val: u64) {
+    let low = val as u32;
+    let high = (val >> 32) as u32;
+    unsafe {
+        core::arch::asm!(
+            "wrmsr",
+            in("ecx") msr,
+            in("eax") low,
+            in("edx") high,
+        );
+    }
+}
+
+pub unsafe fn rdmsr(msr: u32) -> u64 {
+    let low: u32;
+    let high: u32;
+    unsafe {
+        core::arch::asm!(
+            "rdmsr",
+            in("ecx") msr,
+            out("eax") low,
+            out("edx") high,
+        );
+    }
+    ((high as u64) << 32) | (low as u64)
 }

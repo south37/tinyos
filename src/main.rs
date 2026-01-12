@@ -11,6 +11,7 @@ mod pci;
 mod proc;
 mod sleeplock;
 mod spinlock;
+mod syscall;
 mod trap;
 mod uart;
 mod util;
@@ -61,6 +62,9 @@ pub extern "C" fn kmain() -> ! {
 
     trap::init();
     uart_println!("INFO: Traps initialized");
+
+    syscall::init();
+    uart_println!("INFO: Syscalls initialized");
 
     bio::binit();
     uart_println!("INFO: Buffer cache initialized");

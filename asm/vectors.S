@@ -38,8 +38,9 @@ alltraps:
     push %rcx
     push %rbx
     push %rax
-    mov %rsp, %rdi  # Pass TrapFrame
+    mov %rsp, %rdi  # Argument: &TrapFrame
     call trap_handler
+# fn trapret();
 .global trapret
 trapret:
     # Restore registers

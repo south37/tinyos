@@ -45,6 +45,10 @@ pub fn init() {
     }
 }
 
+pub fn tss_addr() -> u64 {
+    unsafe { core::ptr::addr_of!(TSS) as u64 }
+}
+
 unsafe fn load_tr(selector: u16) {
     unsafe {
         core::arch::asm!("ltr {0:x}", in(reg) selector, options(nostack, preserves_flags));
@@ -66,9 +70,9 @@ pub const TSS_SELECTOR: u16 = (TSS_SELECTOR_INDEX << 3) as u16;
 #[repr(C, packed)]
 pub struct TaskStateSegment {
     reserved1: u32,                      // 4 bytes
-    pub privilege_stack_table: [u64; 3], // 24 bytes
-    reserved2: u64,                      // 8 bytes
-    pub interrupt_stack_table: [u64; 7], // 56 bytes
+    pub privilege_stack_table: [u64; 3], // 24 bytes. RSP0-RSP2.
+    reserved2: u64,                      // 8 bytes. Scratch space.
+    pub interrupt_stack_table: [u64; 7], // 56 bytes. IST1-7.
     reserved3: u64,                      // 8 bytes
     reserved4: u16,                      // 2 bytes
     pub iomap_base: u16,                 // 2 bytes

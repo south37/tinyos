@@ -1,7 +1,10 @@
-all: entry.o vectors.o initcode
+all: entry.o vectors.o syscall.o initcode
 
 entry.o: entry.S
 	cc -fno-pic -gdwarf-2 -m64 -mcmodel=kernel -mno-red-zone -c entry.S
+
+syscall.o: syscall.S
+	cc -fno-pic -gdwarf-2 -m64 -mcmodel=kernel -mno-red-zone -c syscall.S
 
 vectors.o: vectors.S
 	cc -fno-pic -gdwarf-2 -m64 -mcmodel=kernel -mno-red-zone -c vectors.S

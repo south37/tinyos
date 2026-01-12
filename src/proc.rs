@@ -95,13 +95,16 @@ pub fn wakeup(chan: usize) {
 }
 
 unsafe extern "C" {
+    // Defined in this file.
     fn swtch(old: *mut *mut Context, new: *mut Context);
+    // Defined in asm/vectors.S
     fn trapret();
 }
 
 // Save callee-saved registers and switch stack
 // rdi -> old context
 // rsi -> new context
+// fn swtch(old: *mut *mut Context, new: *mut Context);
 global_asm!(
     ".global swtch",
     "swtch:",
