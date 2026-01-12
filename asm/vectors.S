@@ -20,10 +20,23 @@ alltraps:
     push %rbx
     push %rax
     mov %rsp, %rdi  # Argument: &TrapFrame
+
+    # Check CS (144 = 15 regs * 8 + trap_num + error_code + rip)
+    testb $3, 144(%rsp)
+    jz 1f
+    swapgs
+1:
+
     call trap_handler
 # fn trapret();
 .global trapret
 trapret:
+    # Check CS
+    testb $3, 144(%rsp)
+    jz 1f
+    swapgs
+1:
+
     # Restore registers
     pop %rax
     pop %rbx

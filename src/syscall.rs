@@ -26,6 +26,9 @@ pub fn init(cpuid: usize) {
         // 5. Setup KERNEL_GS_BASE
         // Point to TSS to find RSP0.
         wrmsr(MSR_KERNEL_GS_BASE, tss_addr(cpuid));
+
+        // Switch to Kernel GS Base (Active GS = TSS, Shadow GS = User/0)
+        core::arch::asm!("swapgs");
     }
 }
 
