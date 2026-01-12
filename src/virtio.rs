@@ -1,6 +1,7 @@
+#![allow(unsafe_op_in_unsafe_fn)]
 use crate::allocator::Allocator;
 use crate::pci::PciDevice;
-use crate::uart_println;
+
 use crate::util::{PG_SIZE, v2p};
 use crate::util::{inb, inl, inw, outb, outl, outw};
 use core::mem::size_of;
@@ -89,7 +90,7 @@ pub unsafe fn intr() {
         if status & 1 != 0 || status & 3 != 0 {
             // Wakeup waiting process
             let guard = VIRTIO_LOCK.lock();
-            unsafe { crate::proc::wakeup(addr_of!(VIRTIO_BLK_DRIVER) as usize) };
+            crate::proc::wakeup(addr_of!(VIRTIO_BLK_DRIVER) as usize);
             drop(guard);
         }
     }
@@ -102,7 +103,7 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
 
     let io_base = dev.base_addr as u16;
     unsafe { VIRTIO_IO_BASE = io_base };
-    uart_println!("INFO: Virtio: io_base={:x}", io_base);
+    crate::info!("Virtio: io_base={:x}", io_base);
 
     // 1. Reset device
     unsafe { outb(io_base + VIRTIO_REG_DEVICE_STATUS, 0) };
@@ -119,12 +120,12 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     unsafe { outw(io_base + VIRTIO_REG_QUEUE_SELECT, 0) };
 
     let q_size = unsafe { inw(io_base + VIRTIO_REG_QUEUE_SIZE) } as usize;
-    uart_println!("INFO: Virtio: Device Queue 0 size {}", q_size);
+    crate::info!("Virtio: Device Queue 0 size {}", q_size);
 
     // Check if device supports large enough queue
     if q_size < QUEUE_SIZE {
-        uart_println!(
-            "ERROR: Virtio: Warning device queue size {} < compiled {}",
+        crate::error!(
+            "Virtio: Warning device queue size {} < compiled {}",
             q_size,
             QUEUE_SIZE
         );
@@ -136,7 +137,7 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     let p3 = allocator.kalloc();
 
     if p1.is_null() || p2.is_null() || p3.is_null() {
-        uart_println!("ERROR: Virtio: Failed to allocate pages");
+        crate::error!("Virtio: Failed to allocate pages");
         return;
     }
 
@@ -145,8 +146,8 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     let pages = [p3 as usize, p2 as usize, p1 as usize];
 
     if pages[1] != pages[0] + PG_SIZE || pages[2] != pages[1] + PG_SIZE {
-        uart_println!(
-            "ERROR: Virtio: Failed to allocate 3 contiguous pages: {:x} {:x} {:x}",
+        crate::error!(
+            "Virtio: Failed to allocate 3 contiguous pages: {:x} {:x} {:x}",
             pages[0],
             pages[1],
             pages[2]
@@ -162,8 +163,8 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     }
 
     let paddr_pages = v2p(base_addr as usize);
-    uart_println!(
-        "INFO: Virtio: pages vaddr={:p} paddr={:x}",
+    crate::info!(
+        "Virtio: pages vaddr={:p} paddr={:x}",
         base_addr,
         paddr_pages
     );
@@ -192,7 +193,7 @@ pub unsafe fn init(dev: &PciDevice, allocator: &mut Allocator) {
     unsafe { outb(io_base + VIRTIO_REG_DEVICE_STATUS, status) };
 
     unsafe { *addr_of_mut!(VIRTIO_BLK_DRIVER) = Some(driver) };
-    uart_println!("INFO: Virtio-blk initialized (Legacy) QSize={}", QUEUE_SIZE);
+    crate::info!("Virtio-blk initialized (Legacy) QSize={}", QUEUE_SIZE);
 }
 
 #[repr(C)]
@@ -237,11 +238,11 @@ impl VirtioDriver {
             sector,
         };
 
-        let mut status: u8 = 111;
+        let status_val: u8 = 111;
 
         let req_paddr = v2p(&req as *const _ as usize);
         let buf_paddr = v2p(buf.as_ptr() as usize);
-        let status_paddr = v2p(&status as *const _ as usize);
+        let status_paddr = v2p(&status_val as *const _ as usize);
 
         let desc_ptr = self.queue_desc;
 
@@ -292,7 +293,7 @@ impl VirtioDriver {
                 crate::proc::sleep(addr_of!(VIRTIO_BLK_DRIVER) as usize, Some(guard));
                 guard = VIRTIO_LOCK.lock();
             } else {
-                crate::uart_println!("DEBUG: virtio busy wait");
+                crate::debug!("virtio busy wait");
                 drop(guard);
                 core::arch::asm!("pause");
                 guard = VIRTIO_LOCK.lock();
@@ -301,8 +302,8 @@ impl VirtioDriver {
 
         self.used_idx = self.used_idx.wrapping_add(1);
 
-        if status != 0 {
-            uart_println!("ERROR: Virtio: IO Error status={}", status);
+        if status_val != 0 {
+            crate::error!("Virtio: IO Error status={}", status_val);
         }
 
         self.free_desc(head_idx);

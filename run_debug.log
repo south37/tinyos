@@ -1,0 +1,853 @@
+make -C asm
+make[1]: Entering directory '/home/south37/ghq/github.com/south37/tinyos/asm'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/home/south37/ghq/github.com/south37/tinyos/asm'
+cargo build --release
+   Compiling tinyos v0.1.0 (/home/south37/ghq/github.com/south37/tinyos)
+warning: unused import: `IRQ_TIMER`
+ --> src/ioapic.rs:4:32
+  |
+4 | use crate::util::{IOAPIC_ADDR, IRQ_TIMER, T_...
+  |                                ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::uart_println`
+ --> src/log.rs:1:5
+  |
+1 | use crate::uart_println;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `SpinlockGuard`
+ --> src/sleeplock.rs:2:33
+  |
+2 | use crate::spinlock::{Spinlock, SpinlockGuard};
+  |                                 ^^^^^^^^^^^^^
+
+warning: unused import: `allocator::Allocator`
+  --> src/main.rs:28:5
+   |
+28 | use allocator::Allocator;
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: the feature `const_mut_refs` has been stable since 1.83.0 and no longer requires an attribute to enable
+ --> src/main.rs:4:12
+  |
+4 | #![feature(const_mut_refs)] // For static mu...
+  |            ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(stable_features)]` on by default
+
+warning: variable does not need to be mutable
+  --> src/bio.rs:98:9
+   |
+98 |     let mut cache = BCACHE.lock();
+   |         ----^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unnecessary `unsafe` block
+  --> src/console.rs:47:17
+   |
+47 | ...   unsafe { core::ptr::addr_of!(guard.r)...
+   |       ^^^^^^ unnecessary `unsafe` block
+   |
+   = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unnecessary `unsafe` block
+   --> src/console.rs:116:45
+    |
+116 | ...up(unsafe { core::ptr::addr_of!(guard.r...
+    |       ^^^^^^ unnecessary `unsafe` block
+
+warning: variable does not need to be mutable
+   --> src/exec.rs:103:17
+    |
+103 |             let mut addr = ph.vaddr;
+    |                 ----^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: unused variable: `old_pgdir`
+   --> src/exec.rs:253:13
+    |
+253 |         let old_pgdir = p.pgdir;
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_old_pgdir`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `sp` is never read
+   --> src/exec.rs:269:9
+    |
+269 |         sp -= 8;
+    |         ^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src/file.rs:64:9
+   |
+64 |     let mut ft = FTABLE.lock();
+   |         ----^^
+   |         |
+   |         help: remove this `mut`
+
+warning[E0133]: call to unsafe function `ioapic::write` is unsafe and requires unsafe block
+  --> src/ioapic.rs:36:5
+   |
+36 |     write(ioapic_addr, REG_TABLE + 2 * irq, T_IRQ0 + irq);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+   |
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+  --> src/ioapic.rs:32:1
+   |
+32 | pub unsafe fn enable(irq: u32, cpu_id: u32) {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(unsafe_op_in_unsafe_fn)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
+
+warning[E0133]: call to unsafe function `ioapic::write` is unsafe and requires unsafe block
+  --> src/ioapic.rs:40:5
+   |
+40 |     write(ioapic_addr, REG_TABLE + 2 * irq + 1, cpu_id << 24);
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+   |
+   = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+   = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `lapic::write` is unsafe and requires unsafe block
+   --> src/lapic.rs:106:5
+    |
+106 |     write(lapic, reg, val);
+    |     ^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/lapic.rs:104:1
+    |
+104 | pub unsafe fn write_reg(reg: u32, val: u32) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `lapic::read` is unsafe and requires unsafe block
+   --> src/lapic.rs:112:5
+    |
+112 |     read(lapic, reg)
+    |     ^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/lapic.rs:110:1
+    |
+110 | pub unsafe fn read_reg(reg: u32) -> u32 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/proc.rs:175:22
+    |
+175 |         let p = &mut **p;
+    |                      ^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/proc.rs:171:1
+    |
+171 | pub unsafe fn sched(guard: SpinlockGuard<()>) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `proc::swtch` is unsafe and requires unsafe block
+   --> src/proc.rs:192:9
+    |
+192 | ...   swtch(&mut p.context as *mut _, cpu.scheduler_context);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning: variable does not need to be mutable
+   --> src/proc.rs:363:13
+    |
+363 |         let mut guard = PROCS_LOCK.lock();
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/proc.rs:415:9
+    |
+415 |     let mut guard = PROCS_LOCK.lock();
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable `i` is assigned to, but never used
+   --> src/proc.rs:407:9
+    |
+407 |     let mut i: isize = -1;
+    |         ^^^^^
+    |
+    = note: consider using `_i` instead
+
+warning: value assigned to `i` is never read
+   --> src/proc.rs:420:17
+    |
+420 |                 i = idx as isize;
+    |                 ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `pid` is never read
+   --> src/proc.rs:408:26
+    |
+408 |     let mut pid: isize = -1;
+    |                          ^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: variable does not need to be mutable
+   --> src/proc.rs:519:9
+    |
+519 |     let mut guard = PROCS_LOCK.lock();
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `pid`
+   --> src/proc.rs:534:13
+    |
+534 | pub fn wait(pid: isize) -> isize {
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_pid`
+
+warning[E0133]: use of mutable static is unsafe and requires unsafe block
+   --> src/proc.rs:597:18
+    |
+597 |         for p in PROCS.iter_mut() {
+    |                  ^^^^^ use of mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: mutable statics can be mutated by multiple threads: aliasing violations or data races will cause undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/proc.rs:592:1
+    |
+592 | unsafe fn wakeup1(chan: Option<*mut Process>) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary `unsafe` block
+  --> src/virtio.rs:92:13
+   |
+92 | ...   unsafe { crate::proc::wakeup(addr_of!...
+   |       ^^^^^^ unnecessary `unsafe` block
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:249:9
+    |
+249 | ...   (*desc_ptr.add(head_idx as usize)).ad...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+note: an unsafe function restricts its caller, but its body is safe by default
+   --> src/virtio.rs:225:5
+    |
+225 |     unsafe fn submit(&mut self, sector: u64, buf: &mut [u8], write: bool) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:249:11
+    |
+249 | ... (*desc_ptr.add(head_idx as usize)).add...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:250:9
+    |
+250 | ...   (*desc_ptr.add(head_idx as usize)).le...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:250:11
+    |
+250 | ... (*desc_ptr.add(head_idx as usize)).len...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:251:9
+    |
+251 | ...   (*desc_ptr.add(head_idx as usize)).fl...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:251:11
+    |
+251 | ... (*desc_ptr.add(head_idx as usize)).fla...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:252:9
+    |
+252 | ...   (*desc_ptr.add(head_idx as usize)).ne...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:252:11
+    |
+252 | ... (*desc_ptr.add(head_idx as usize)).nex...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:255:9
+    |
+255 | ...   (*desc_ptr.add(data_idx as usize)).ad...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:255:11
+    |
+255 | ... (*desc_ptr.add(data_idx as usize)).add...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:256:9
+    |
+256 | ...   (*desc_ptr.add(data_idx as usize)).le...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:256:11
+    |
+256 | ... (*desc_ptr.add(data_idx as usize)).len...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:257:9
+    |
+257 | ...   (*desc_ptr.add(data_idx as usize)).fl...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:257:11
+    |
+257 | ... (*desc_ptr.add(data_idx as usize)).fla...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:259:13
+    |
+259 | ...   (*desc_ptr.add(data_idx as usize)).fl...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:259:15
+    |
+259 | ... (*desc_ptr.add(data_idx as usize)).fla...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:261:9
+    |
+261 | ...   (*desc_ptr.add(data_idx as usize)).ne...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:261:11
+    |
+261 | ... (*desc_ptr.add(data_idx as usize)).nex...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:264:9
+    |
+264 | ...   (*desc_ptr.add(status_idx as usize)).ad...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:264:11
+    |
+264 | ... (*desc_ptr.add(status_idx as usize)).a...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:265:9
+    |
+265 | ...   (*desc_ptr.add(status_idx as usize)).le...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:265:11
+    |
+265 | ... (*desc_ptr.add(status_idx as usize)).l...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:266:9
+    |
+266 | ...   (*desc_ptr.add(status_idx as usize)).fl...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:266:11
+    |
+266 | ... (*desc_ptr.add(status_idx as usize)).f...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:267:9
+    |
+267 | ...   (*desc_ptr.add(status_idx as usize)).ne...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::mut_ptr::<impl *mut T>::add` is unsafe and requires unsafe block
+   --> src/virtio.rs:267:11
+    |
+267 | ... (*desc_ptr.add(status_idx as usize)).n...
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:270:19
+    |
+270 |         let idx = (*avail).idx;
+    |                   ^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:271:9
+    |
+271 |         (*avail).ring[idx as usize % QUEUE...
+    |         ^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:273:9
+    |
+273 |         (*avail).idx = idx.wrapping_add(1);
+    |         ^^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: call to unsafe function `util::outw` is unsafe and requires unsafe block
+   --> src/virtio.rs:278:9
+    |
+278 | ...   outw(self.io_base + VIRTIO_REG_QUEUE_NOTIFY, 0);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: call to unsafe function `core::ptr::read_volatile` is unsafe and requires unsafe block
+   --> src/virtio.rs:285:23
+    |
+285 | ... = core::ptr::read_volatile(&(*used).idx);
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ call to unsafe function
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: consult the function's documentation for information on how to avoid undefined behavior
+
+warning[E0133]: dereference of raw pointer is unsafe and requires unsafe block
+   --> src/virtio.rs:285:49
+    |
+285 | ...ad_volatile(&(*used).idx);
+    |                 ^^^^^^^ dereference of raw pointer
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: raw pointers may be null, dangling or unaligned; they can violate aliasing rules and cause data races: all of these are undefined behavior
+
+warning[E0133]: use of inline assembly is unsafe and requires unsafe block
+   --> src/virtio.rs:297:17
+    |
+297 |                 core::arch::asm!("pause");
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^ use of inline assembly
+    |
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/unsafe-op-in-unsafe-fn.html>
+    = note: inline assembly is entirely unchecked and can cause undefined behavior
+
+warning: variable does not need to be mutable
+   --> src/virtio.rs:240:13
+    |
+240 |         let mut status: u8 = 111;
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: field `disk` is never read
+  --> src/bio.rs:10:9
+   |
+ 8 | pub struct Buf {
+   |            --- field in this struct
+ 9 |     pub valid: bool, // Has data been read ...
+10 |     pub disk: bool,  // Does content match ...
+   |         ^^^^
+   |
+   = note: `Buf` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `ET_EXEC` is never used
+ --> src/elf.rs:6:11
+  |
+6 | pub const ET_EXEC: u16 = 2; // Executable file
+  |           ^^^^^^^
+
+warning: constant `ET_DYN` is never used
+ --> src/elf.rs:7:11
+  |
+7 | pub const ET_DYN: u16 = 3; // Shared object ...
+  |           ^^^^^^
+
+warning: constant `EM_X86_64` is never used
+  --> src/elf.rs:10:11
+   |
+10 | pub const EM_X86_64: u16 = 62; // AMD x86-64
+   |           ^^^^^^^^^
+
+warning: constant `PF_X` is never used
+  --> src/elf.rs:16:11
+   |
+16 | pub const PF_X: u32 = 1; // Executable
+   |           ^^^^
+
+warning: constant `PF_W` is never used
+  --> src/elf.rs:17:11
+   |
+17 | pub const PF_W: u32 = 2; // Writable
+   |           ^^^^
+
+warning: constant `PF_R` is never used
+  --> src/elf.rs:18:11
+   |
+18 | pub const PF_R: u32 = 4; // Readable
+   |           ^^^^
+
+warning: variants `Pipe` and `Inode` are never constructed
+  --> src/file.rs:9:5
+   |
+ 7 | pub enum FileType {
+   |          -------- variants in this enum
+ 8 |     None,
+ 9 |     Pipe,
+   |     ^^^^
+10 |     Inode,
+   |     ^^^^^
+   |
+   = note: `FileType` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: field `pipe` is never read
+  --> src/file.rs:20:9
+   |
+15 | pub struct File {
+   |            ---- field in this struct
+...
+20 |     pub pipe: usize, // Placeholder for pipe
+   |         ^^^^
+   |
+   = note: `File` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: function `fileclose` is never used
+  --> src/file.rs:63:8
+   |
+63 | pub fn fileclose(f: &mut File) {
+   |        ^^^^^^^^^
+
+warning: function `filestat` is never used
+  --> src/file.rs:84:8
+   |
+84 | pub fn filestat(_f: &File, _addr: u64) -> i...
+   |        ^^^^^^^^
+
+warning: constant `EXT2_DIND_BLOCK` is never used
+  --> src/fs.rs:12:11
+   |
+12 | pub const EXT2_DIND_BLOCK: usize = 13;
+   |           ^^^^^^^^^^^^^^^
+
+warning: constant `EXT2_TIND_BLOCK` is never used
+  --> src/fs.rs:13:11
+   |
+13 | pub const EXT2_TIND_BLOCK: usize = 14;
+   |           ^^^^^^^^^^^^^^^
+
+warning: constant `EXT2_N_BLOCKS` is never used
+  --> src/fs.rs:14:11
+   |
+14 | pub const EXT2_N_BLOCKS: usize = 15;
+   |           ^^^^^^^^^^^^^
+
+warning: function `iput` is never used
+   --> src/fs.rs:289:8
+    |
+289 | pub fn iput(_ip: &Inode) {}
+    |        ^^^^
+
+warning: function `iinit` is never used
+   --> src/fs.rs:290:8
+    |
+290 | pub fn iinit() {}
+    |        ^^^^^
+
+warning: associated function `default` is never used
+   --> src/gdt.rs:131:12
+    |
+130 | impl Descriptor {
+    | --------------- associated function in this implementation
+131 |     pub fn default() -> Self {
+    |            ^^^^^^^
+
+warning: field `func` is never read
+  --> src/pci.rs:10:9
+   |
+ 7 | pub struct PciDevice {
+   |            --------- field in this struct
+...
+10 |     pub func: u8,
+   |         ^^^^
+
+warning: field `started` is never read
+  --> src/proc.rs:78:9
+   |
+74 | pub struct Cpu {
+   |            --- field in this struct
+...
+78 |     pub started: bool,
+   |         ^^^^^^^
+   |
+   = note: `Cpu` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: method `get_mut` is never used
+  --> src/sleeplock.rs:30:12
+   |
+12 | impl<T> SleepLockSafe<T> {
+   | ------------------------ method in this implementation
+...
+30 |     pub fn get_mut(&mut self) -> &mut T {
+   |            ^^^^^^^
+
+warning: method `as_ptr` is never used
+  --> src/spinlock.rs:56:12
+   |
+21 | impl<T> Spinlock<T> {
+   | ------------------- method in this implementation
+...
+56 |     pub fn as_ptr(&self) -> *mut T {
+   |            ^^^^^^
+
+warning: struct `VirtioBlkOutHeader` is never constructed
+  --> src/virtio.rs:63:8
+   |
+63 | struct VirtioBlkOutHeader {
+   |        ^^^^^^^^^^^^^^^^^^
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> src/fs.rs:253:18
+    |
+253 | ...ck(&self) -> SleepLockGuard<DiskInode> {
+    |       ^^^^^     ^^^^^^^^^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+    |       |
+    |       the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+253 |     pub fn ilock(&self) -> SleepLockGuard<'_, DiskInode> {
+    |                                           +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/sleeplock.rs:20:17
+   |
+20 |     pub fn lock(&self) -> SleepLockGuard<T> {
+   |                 ^^^^^     ^^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                 |
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+20 |     pub fn lock(&self) -> SleepLockGuard<'_, T> {
+   |                                          +++
+
+warning: hiding a lifetime that's elided elsewhere is confusing
+  --> src/spinlock.rs:30:17
+   |
+30 |     pub fn lock(&self) -> SpinlockGuard<T> {
+   |                 ^^^^^     ^^^^^^^^^^^^^^^^ the same lifetime is hidden here
+   |                 |
+   |                 the lifetime is elided here
+   |
+   = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+help: use `'_` for type paths
+   |
+30 |     pub fn lock(&self) -> SpinlockGuard<'_, T> {
+   |                                         +++
+
+warning: direct cast of function item into an integer
+  --> src/syscall.rs:20:40
+   |
+20 | ...R, syscall_entry as u64);
+   |                     ^^^^^^
+   |
+   = note: `#[warn(function_casts_as_integer)]` on by default
+help: first cast to a pointer `as *const ()`
+   |
+20 |         wrmsr(MSR_LSTAR, syscall_entry as *const () as u64);
+   |                                        ++++++++++++
+
+For more information about this error, try `rustc --explain E0133`.
+warning: `tinyos` (bin "tinyos") generated 87 warnings (run `cargo fix --bin "tinyos" -p tinyos` to apply 23 suggestions)
+    Finished `release` profile [optimized] target(s) in 0.31s
+make -C user
+make[1]: Entering directory '/home/south37/ghq/github.com/south37/tinyos/user'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/home/south37/ghq/github.com/south37/tinyos/user'
+mkdir -p build/fs
+echo "Hello Ext2" > build/fs/hello.txt
+cp user/init build/fs/
+cp user/sh build/fs/
+cp user/echo build/fs/
+dd if=/dev/zero of=disk.img bs=1M count=32
+32+0 records in
+32+0 records out
+33554432 bytes (34 MB, 32 MiB) copied, 0.0101696 s, 3.3 GB/s
+mkfs.ext2 -E revision=0 -b 1024 -d build/fs -F disk.img
+mke2fs 1.47.2 (1-Jan-2025)
+Discarding device blocks:     0/32768           done                            
+Creating filesystem with 32768 1k blocks and 8192 inodes
+Filesystem UUID: f1c96da1-6d64-492e-8133-68c89ca7f780
+Superblock backups stored on blocks: 
+	8193, 16385, 24577
+
+Allocating group tables: 0/4   done                            
+Writing inode tables: 0/4   done                            
+Copying files into the device: done
+Writing superblocks and filesystem accounting information: 0/4   done
+
+qemu-system-x86_64 \
+	-kernel target/x86_64-unknown-none/release/tinyos \
+	-m 256M -smp 2 -net none -nographic -serial mon:stdio \
+	-d guest_errors \
+	-D qemu.log \
+	-drive file=disk.img,if=none,format=raw,id=x0 \
+	-device virtio-blk-pci,drive=x0,bus=pci.0,addr=0x3
+c[?7l[2J[0mSeaBIOS (version 1.16.3-debian-1.16.3-2)
+Booting from ROM..[34m[INFO][0m Hello from tinyos!
+[34m[INFO][0m Page table loaded
+[34m[INFO][0m GDT loaded
+[34m[INFO][0m CPUs initialized
+[34m[INFO][0m LAPIC initialized
+INFO: IOAPIC address: ffffffff40c00000
+INFO: IOAPIC max entries: 23
+[34m[INFO][0m IOAPIC initialized
+[34m[INFO][0m Traps initialized
+[34m[INFO][0m Syscalls initialized
+[34m[INFO][0m Buffer cache initialized
+DEBUG: kstack: 0xffffffff8fff5000
+[34m[INFO][0m Init process initialized
+INFO: PCI: 00:03.0 Vendor=1af4 Device=1001 BAR0=c000 IRQ=11
+[34m[INFO][0m Device found, initializing virtio (legacy)...
+INFO: Virtio: io_base=c000
+INFO: Virtio: Device Queue 0 size 256
+INFO: Virtio: pages vaddr=0xffffffff8ffee000 paddr=ffee000
+INFO: Virtio-blk initialized (Legacy) QSize=256
+DEBUG: virtio busy wait
+DEBUG: virtio busy wait
+[34m[INFO][0m Filesystem initialized
+[34m[INFO][0m Starting APs...
+INFO: CPU 1 started!
+INFO: Scheduler starting on CPU 1
+[32m[DEBUG][0m DEBUG: kernel initialized
+INFO: Scheduler starting on CPU 0
+DEBUG: exec: found /init
+DEBUG: exec: loaded elf, entry=0x1080
+DEBUG: exec: segments loaded
+DEBUG: exec: stack allocated
+DEBUG: exec: process committed
+init: starting
+DEBUG: exec: found sh
+DEBUG: exec: loaded elf, entry=0x1000
+DEBUG: exec: segments loaded
+DEBUG: exec: stack allocated
+DEBUG: exec: process committed
+$ qemu-system-x86_64: terminating on signal 15 from pid 856793 (timeout)

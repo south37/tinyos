@@ -13,6 +13,7 @@ mod fs;
 mod gdt;
 mod ioapic;
 mod lapic;
+mod log;
 mod pci;
 mod proc;
 mod sleeplock;
@@ -41,7 +42,7 @@ fn kernel_range() -> (usize, usize) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kmain() -> ! {
-    uart_println!("Hello from tinyos!");
+    crate::info!("Hello from tinyos!");
 
     crate::allocator::ALLOCATOR
         .lock()
@@ -51,38 +52,38 @@ pub extern "C" fn kmain() -> ! {
         let mut allocator = crate::allocator::ALLOCATOR.lock();
         vm::init(&mut allocator);
     }
-    uart_println!("INFO: Page table loaded");
+    crate::info!("Page table loaded");
 
     gdt::init(0);
-    uart_println!("INFO: GDT loaded");
+    crate::info!("GDT loaded");
 
     proc::init_cpus();
-    uart_println!("INFO: CPUs initialized");
+    crate::info!("CPUs initialized");
 
     lapic::init();
-    uart_println!("INFO: LAPIC initialized");
+    crate::info!("LAPIC initialized");
 
     ioapic::init();
-    uart_println!("INFO: IOAPIC initialized");
+    crate::info!("IOAPIC initialized");
 
     trap::init();
-    uart_println!("INFO: Traps initialized");
+    crate::info!("Traps initialized");
 
     syscall::init(0);
-    uart_println!("INFO: Syscalls initialized");
+    crate::info!("Syscalls initialized");
 
     bio::binit();
-    uart_println!("INFO: Buffer cache initialized");
+    crate::info!("Buffer cache initialized");
 
     {
         let mut allocator = crate::allocator::ALLOCATOR.lock();
         proc::init_process(&mut allocator);
     }
-    uart_println!("INFO: Init process initialized");
+    crate::info!("Init process initialized");
 
     let device = pci::scan_pci(virtio::VIRTIO_LEGACY_DEVICE_ID);
     if let Some(dev) = device {
-        uart_println!("INFO: Device found, initializing virtio (legacy)...");
+        crate::info!("Device found, initializing virtio (legacy)...");
         // Initialize Virtio
         unsafe {
             let mut allocator = crate::allocator::ALLOCATOR.lock();
@@ -99,7 +100,7 @@ pub extern "C" fn kmain() -> ! {
 
         // Initialize Filesystem
         fs::fsinit(1);
-        uart_println!("INFO: Filesystem initialized");
+        crate::info!("Filesystem initialized");
     }
 
     // Enable interrupts
@@ -108,6 +109,8 @@ pub extern "C" fn kmain() -> ! {
     }
 
     start_aps();
+
+    crate::debug!("DEBUG: kernel initialized");
 
     proc::scheduler();
 
@@ -119,7 +122,7 @@ pub extern "C" fn kmain() -> ! {
 }
 
 fn start_aps() {
-    uart_println!("INFO: Starting APs...");
+    crate::info!("Starting APs...");
     let entry_code = include_bytes!("../asm/entryother");
     let code_ptr = p2v(0x7000) as *mut u8;
 
@@ -135,7 +138,7 @@ fn start_aps() {
         let mut allocator = crate::allocator::ALLOCATOR.lock();
         let stack = allocator.kalloc();
         if stack.is_null() {
-            uart_println!("ERROR: Failed to allocate stack for CPU {}", i);
+            crate::error!("Failed to allocate stack for CPU {}", i);
             continue;
         }
 
@@ -195,7 +198,7 @@ pub extern "C" fn mpenter() -> ! {
     // 5. Init Syscall (MSRs)
     crate::syscall::init(cpuid);
 
-    uart_println!("INFO: CPU {} started!", cpuid);
+    crate::info!("CPU {} started!", cpuid);
 
     // Mark started
     // unsafe { proc::CPUS[cpuid as usize].started = true; }

@@ -1,5 +1,5 @@
 use crate::allocator::Allocator;
-use crate::uart_println;
+
 use crate::util::{PG_SIZE, p2v, v2p};
 
 static mut KPGDIR: *mut PageTable = core::ptr::null_mut();
@@ -32,7 +32,7 @@ pub fn kvm_create(allocator: &mut Allocator) -> Option<*mut PageTable> {
         PageTableEntry::WRITABLE,
     );
     if !r {
-        uart_println!("Linear map [0, 0 + 1GiB) failed");
+        crate::error!("Linear map [0, 0 + 1GiB) failed");
         return None;
     }
     if !map_highmem(pgdir, allocator) {
@@ -53,7 +53,7 @@ fn map_highmem(pgdir: *mut PageTable, allocator: &mut Allocator) -> bool {
         PageTableEntry::WRITABLE,
     );
     if !r {
-        uart_println!("Linear map [KERNBASE, KERNBASE + 1GiB) failed");
+        crate::error!("Linear map [KERNBASE, KERNBASE + 1GiB) failed");
         return false;
     }
     // Linear map. Virtual: [DEVBASE, DEVBASE + 512MiB) -> Physical: [DEVSPACE, DEVSPACE + 512MiB)
@@ -66,7 +66,7 @@ fn map_highmem(pgdir: *mut PageTable, allocator: &mut Allocator) -> bool {
         PageTableEntry::WRITABLE | PageTableEntry::WRITE_THROUGH | PageTableEntry::CACHE_DISABLE,
     );
     if !r {
-        uart_println!("Linear map [DEVBASE, DEVBASE + 512MiB) failed");
+        crate::error!("Linear map [DEVBASE, DEVBASE + 512MiB) failed");
         return false;
     }
     true
@@ -116,12 +116,12 @@ pub fn map_pages(
 
         let pte = walk(pgdir, allocator, addr, true, level);
         if pte.is_none() {
-            uart_println!("Failed to map address: {:x}", addr);
+            crate::error!("Failed to map address: {:x}", addr);
             return false;
         }
         let pte = pte.unwrap();
         if pte.is_present() {
-            uart_println!("Address {:x} already mapped", addr);
+            crate::error!("Address {:x} already mapped", addr);
             return false;
         }
 

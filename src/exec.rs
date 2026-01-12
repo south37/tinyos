@@ -1,7 +1,7 @@
 use crate::elf::{ELF_MAGIC, ElfHeader, PT_LOAD, ProgramHeader};
 use crate::fs::{self};
 use crate::trap::TrapFrame;
-use crate::uart_println;
+
 use crate::util::{PG_SIZE, p2v};
 use crate::vm::{self, PageTableEntry};
 
@@ -9,11 +9,11 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
     // 1. Open file
     let ip = match fs::namei(path) {
         Some(ip) => {
-            uart_println!("DEBUG: exec: found {}", path);
+            crate::debug!("exec: found {}", path);
             ip
         }
         None => {
-            uart_println!("DEBUG: exec: failed to find {}", path);
+            crate::debug!("exec: failed to find {}", path);
             return -1;
         }
     };
@@ -44,12 +44,12 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
         core::mem::size_of::<ElfHeader>() as u32,
     );
     if sz != core::mem::size_of::<ElfHeader>() as u32 || elf.magic != ELF_MAGIC {
-        uart_println!("DEBUG: exec: bad elf header");
+        crate::debug!("exec: bad elf header");
         return -1;
     }
 
     // 3. Create new page table
-    uart_println!("DEBUG: exec: loaded elf, entry=0x{:x}", elf.entry);
+    crate::debug!("exec: loaded elf, entry=0x{:x}", elf.entry);
 
     let pgdir = {
         let mut allocator = crate::allocator::ALLOCATOR.lock();
@@ -160,7 +160,7 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
         // Zero out bss (memsz > filesz)
         // ... (Skipping BSS zeroing for brevity, assuming filesz == memsz for simple tests or explicit init)
     }
-    uart_println!("DEBUG: exec: segments loaded");
+    crate::debug!("exec: segments loaded");
     // Arbitrary stack location: 0x80000000 ? Or just below high memory?
     // Let's put it at 0x7FFFF000 usually?
     let sz = 0x80000000; // Top of stack
@@ -194,7 +194,7 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
             PageTableEntry::WRITABLE | PageTableEntry::USER,
         );
     }
-    uart_println!("DEBUG: exec: stack allocated");
+    crate::debug!("exec: stack allocated");
 
     // 5. Push arguments to stack
     let mut sp = sz;
@@ -276,7 +276,7 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
         // TODO: Free old pgdir and memory.
         // vm::free_vm(old_pgdir);
     }
-    uart_println!("DEBUG: exec: process committed");
+    crate::debug!("exec: process committed");
 
     0
 }

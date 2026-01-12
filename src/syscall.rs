@@ -39,7 +39,6 @@ unsafe extern "C" {
 
 use crate::proc::mycpu;
 use crate::trap::TrapFrame;
-use crate::uart_println;
 
 pub const SYS_READ: u64 = 0;
 pub const SYS_WRITE: u64 = 1;
@@ -65,7 +64,7 @@ pub fn syscall() {
         SYS_EXIT => sys_exit(tf),
         SYS_WAIT => sys_wait(tf),
         _ => {
-            uart_println!("Unknown syscall {}", num);
+            crate::error!("Unknown syscall {}", num);
             -1
         }
     };

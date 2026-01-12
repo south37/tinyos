@@ -1,5 +1,5 @@
 use crate::gdt::KCODE_SELECTOR;
-use crate::uart_println;
+
 use crate::util::{IRQ_TIMER, IRQ_UART, IRQ_VIRTIO, T_IRQ0, T_SYSCALL};
 
 pub fn init() {
@@ -108,11 +108,11 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
             crate::syscall::syscall();
         }
         _ => {
-            uart_println!("Trap {} on CPU {}", tf.trap_num, crate::lapic::id());
-            uart_println!("Error Code: {:x}", tf.error_code);
-            uart_println!("RIP: {:x}", tf.rip);
-            uart_println!("CS: {:x}", tf.cs);
-            uart_println!("CR2: {:x}", unsafe { crate::util::rcr2() });
+            crate::error!("Trap {} on CPU {}", tf.trap_num, crate::lapic::id());
+            crate::error!("Error Code: {:x}", tf.error_code);
+            crate::error!("RIP: {:x}", tf.rip);
+            crate::error!("CS: {:x}", tf.cs);
+            crate::error!("CR2: {:x}", unsafe { crate::util::rcr2() });
             // Infinite loop on unhandled trap
             loop {}
         }

@@ -6,6 +6,8 @@ PHYS_MEM ?= 256M
 CARGO ?= cargo
 QEMU ?= qemu-system-x86_64
 MKFS ?= mkfs.ext2
+LOG ?= info
+export LOG_LEVEL := $(LOG)
 
 # Paths
 TARGET_DIR := target/x86_64-unknown-none/$(PROFILE)

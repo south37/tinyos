@@ -3,7 +3,7 @@
 use crate::allocator::Allocator;
 use crate::gdt::{UCODE_SELECTOR, UDATA_SELECTOR};
 use crate::trap::TrapFrame;
-use crate::uart_println;
+
 use crate::util::PG_SIZE;
 use crate::vm::{self, PageTable, PageTableEntry};
 use core::arch::global_asm;
@@ -175,8 +175,8 @@ pub unsafe fn sched(guard: SpinlockGuard<()>) {
         let p = &mut **p;
 
         if cpu.ncli != 1 {
-            crate::uart_println!("PANIC: sched ncli={}", cpu.ncli);
-            crate::uart_println!("PROCS_LOCK held: {}", PROCS_LOCK.holding());
+            crate::error!("PANIC: sched ncli={}", cpu.ncli);
+            crate::error!("PROCS_LOCK held: {}", PROCS_LOCK.holding());
             // crate::uart_println!("VIRTIO_LOCK held: {}", crate::virtio::VIRTIO_LOCK.holding());
             // crate::uart_println!("BCACHE held: {}", crate::bio::BCACHE.holding());
             // crate::uart_println!("ALLOCATOR held: {}", crate::allocator::ALLOCATOR.holding());
@@ -278,7 +278,7 @@ pub fn init_process(allocator: &mut Allocator) {
             p.state = ProcessState::UNUSED;
             return;
         }
-        uart_println!("DEBUG: kstack: 0x{:x}", p.kstack as usize);
+        crate::debug!("kstack: 0x{:x}", p.kstack as usize);
 
         // Init code
         let initcode: &[u8] = include_bytes!("../asm/initcode");
@@ -352,7 +352,7 @@ pub fn scheduler() {
     let cpu = mycpu();
     cpu.process = None; // Ensure no process running
 
-    uart_println!("INFO: Scheduler starting on CPU {}", cpu.lapicid);
+    crate::info!("Scheduler starting on CPU {}", cpu.lapicid);
     loop {
         // Enable interrupts to allow IRQs to wake us up
         unsafe { core::arch::asm!("sti") };
@@ -360,7 +360,7 @@ pub fn scheduler() {
         // Acquire PTABLE LOCK
         // Acquire PTABLE LOCK
         // crate::uart_println!("DEBUG: sched acquiring lock");
-        let mut guard = PROCS_LOCK.lock();
+        let guard = PROCS_LOCK.lock();
         // crate::uart_println!("DEBUG: sched lock acquired");
 
         let mut ran_process = false;
@@ -404,7 +404,6 @@ pub fn scheduler() {
 }
 
 pub fn fork() -> isize {
-    let mut i: isize = -1;
     let mut pid: isize = -1;
 
     let cpu = mycpu();
@@ -412,12 +411,12 @@ pub fn fork() -> isize {
 
     // Allocate process
     let mut np_opt = None;
-    let mut guard = PROCS_LOCK.lock();
+    let guard = PROCS_LOCK.lock();
     unsafe {
-        for (idx, p) in PROCS.iter_mut().enumerate() {
+        for p in PROCS.iter_mut() {
             if p.state == ProcessState::UNUSED {
                 np_opt = Some(p);
-                i = idx as isize;
+                // i = idx as isize;
                 break;
             }
         }
@@ -511,12 +510,12 @@ pub fn exit(status: isize) {
     let cpu = mycpu();
     let curproc = unsafe { &mut *cpu.process.unwrap() };
 
-    uart_println!("Exit: pid={} status={}", curproc.pid, status);
+    crate::info!("Exit: pid={} status={}", curproc.pid, status);
 
     // Close all open files
     // for fd in 0..NFILE { ... }
 
-    let mut guard = PROCS_LOCK.lock();
+    let guard = PROCS_LOCK.lock();
 
     // Wake up parent
     unsafe {
@@ -531,7 +530,7 @@ pub fn exit(status: isize) {
     panic!("zombie exit");
 }
 
-pub fn wait(pid: isize) -> isize {
+pub fn wait(_pid: isize) -> isize {
     let cpu = mycpu();
     let curproc = unsafe { &mut *cpu.process.unwrap() };
 

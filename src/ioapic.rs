@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-use crate::uart_println;
-use crate::util::{IOAPIC_ADDR, IRQ_TIMER, T_IRQ0};
+use crate::util::{IOAPIC_ADDR, T_IRQ0};
 
 const REG_ID: u32 = 0x00;
 const REG_VER: u32 = 0x01;
@@ -12,12 +11,12 @@ const IOWIN: usize = 0x10;
 
 pub fn init() {
     let ioapic_addr = crate::util::io2v(IOAPIC_ADDR);
-    uart_println!("INFO: IOAPIC address: {:x}", ioapic_addr);
+    crate::info!("IOAPIC address: {:x}", ioapic_addr);
 
     // Get max entries from version register
     let ver = unsafe { read(ioapic_addr, REG_VER) };
     let maxintr = (ver >> 16) & 0xFF;
-    uart_println!("INFO: IOAPIC max entries: {}", maxintr);
+    crate::info!("IOAPIC max entries: {}", maxintr);
 
     // Mark all interrupts edge-triggered, active high, disabled,
     // and not routed to any CPUs.
