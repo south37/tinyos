@@ -1,10 +1,10 @@
 # Build
 /target
+/build
 *.o
 *.img
-build
-asm/initcode
-asm/initcode.out
+/asm/initcode
+/asm/initcode.out
 
 # Dev
 *.swp
