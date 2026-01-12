@@ -1,6 +1,6 @@
 use crate::gdt::KCODE_SELECTOR;
 use crate::uart_println;
-use crate::util::{IRQ_TIMER, IRQ_VIRTIO, T_IRQ0, T_SYSCALL};
+use crate::util::{IRQ_TIMER, IRQ_UART, IRQ_VIRTIO, T_IRQ0, T_SYSCALL};
 
 pub fn init() {
     unsafe {
@@ -96,14 +96,13 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
             crate::lapic::eoi();
             crate::proc::yield_proc();
         }
-        n if n == (T_IRQ0 + 4) as u64 => {
+        n if n == (T_IRQ0 + IRQ_UART) as u64 => {
             crate::uart::uartintr();
             crate::lapic::eoi();
         }
         n if n == (T_IRQ0 + IRQ_VIRTIO) as u64 => {
             unsafe { crate::virtio::intr() };
             crate::lapic::eoi();
-            // uart_println!("DEBUG: Virtio Interrupt");
         }
         n if n == T_SYSCALL as u64 => {
             crate::syscall::syscall();
