@@ -82,6 +82,9 @@ pub fn consoleintr(c: fn() -> Option<u8>) {
     let mut guard = CONSOLE.lock();
     loop {
         let c_in = c();
+        if let Some(cc) = c_in {
+            // crate::debug!("consoleintr: got {}", cc);
+        }
         if c_in.is_none() {
             break;
         }

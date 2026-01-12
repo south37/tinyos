@@ -69,6 +69,13 @@ pub extern "C" fn kmain() -> ! {
     trap::init();
     crate::info!("Traps initialized");
 
+    uart::init();
+    crate::info!("UART initialized");
+
+    unsafe {
+        ioapic::enable(IRQ_UART, 0);
+    }
+
     syscall::init(0);
     crate::info!("Syscalls initialized");
 
