@@ -281,7 +281,7 @@ pub fn init_process(allocator: &mut Allocator) {
         crate::debug!("kstack: 0x{:x}", p.kstack as usize);
 
         // Init code
-        let initcode: &[u8] = include_bytes!("../asm/initcode");
+        let initcode: &[u8] = include_bytes!("../asm/build/initcode");
         let mem = allocator.kalloc();
         if mem.is_null() {
             panic!("init_process: kalloc failed");

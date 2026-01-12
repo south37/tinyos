@@ -130,7 +130,7 @@ pub extern "C" fn kmain() -> ! {
 
 fn start_aps() {
     crate::info!("Starting APs...");
-    let entry_code = include_bytes!("../asm/entryother");
+    let entry_code = include_bytes!("../asm/build/entryother");
     let code_ptr = p2v(0x7000) as *mut u8;
 
     unsafe {

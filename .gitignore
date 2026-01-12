@@ -3,13 +3,8 @@
 /build
 *.o
 *.img
-/asm/initcode
-/asm/initcode.out
-/asm/entryother
-/asm/entryother.out
-/user/init
-/user/echo
-/user/sh
+/asm/build
+/user/build
 
 # Dev
 *.swp
