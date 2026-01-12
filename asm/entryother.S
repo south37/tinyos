@@ -89,5 +89,5 @@ gdt:
     .word 0x0000, 0x0000, 0x9A00, 0x0020
 
 gdtdesc:
-    .word   (gdtdesc - gdt - 1)
+    .word   (gdtdesc - gdt - 1)  # sizeof(gdt) - 1
     .long   gdt

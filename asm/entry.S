@@ -13,22 +13,8 @@ mboot_header:
     .long mboot_bss_end
     .long mboot_entry_addr
 
-# Null segment descriptor
-#define SEG_NULLASM                                                            \
-    .word 0, 0;                                                                  \
-    .byte 0, 0, 0, 0
-
-# Segment descriptor for long mode (64-bit).
-# The 0x90 means the presence of P and S. If l=1, the descriptor
-# defines a 64-bit code segment.
-#define SEG64_ASM(type, l)                                                     \
-    .word 0, 0;                                                                  \
-    .byte 0, (0x90 | (type)), (l << 5), 0
-
-#define SEG_KCODE 1   // kernel code
-#define SEG_KDATA 2   // kernel data+stack
-
-#define STA_X 0x8     // Executable segment
+# kernel code segment
+#define SEG_KCODE 1
 
 # EFER(Extended Feature Enable Register)
 #define EFER_MSR 0xC0000080
@@ -113,8 +99,11 @@ ptbl_loop:
 # GDT for 64-bit code. Only code seg (no data seg).
 .p2align 4               # force 16 byte alignment
 gdt64:
-    SEG_NULLASM          # 0: null seg
-    SEG64_ASM(STA_X, 1)  # SEG_KCODE=1: code seg. R/X, Nonconforming
+    .word 0, 0, 0, 0 # Null
+
+    # Code 64-bit (offset 8)
+    # Base=0, Limit=0, Access=0x9A, Flags=0x20 (L=1, D=0)
+    .word 0x0000, 0x0000, 0x9A00, 0x0020
 
 gdt64desc:
     .word  (gdt64desc - gdt64 - 1)  # sizeof(gdt64) - 1
