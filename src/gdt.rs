@@ -1,41 +1,32 @@
 use core::mem::size_of;
 
-static mut TSS: TaskStateSegment = TaskStateSegment::new();
+const NCPU: usize = 8;
+static mut TSS: [TaskStateSegment; NCPU] = [TaskStateSegment::new(); NCPU];
 
-static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable {
-    table: [
-        Descriptor(0),
-        Descriptor(0),
-        Descriptor(0),
-        Descriptor(0),
-        Descriptor(0),
-        Descriptor(0),
-        Descriptor(0),
-    ], // Manually initialized because const fn is tricky with array repeat of structs sometimes or just to be safe
-};
+static mut GDT: [GlobalDescriptorTable; NCPU] = [GlobalDescriptorTable::new(); NCPU];
 
-pub fn init() {
+pub fn init(cpuid: usize) {
     unsafe {
         // Use addr_of_mut! to avoid creating intermediate references to static mut
-        let gdt = core::ptr::addr_of_mut!(GDT);
-        (*gdt) = GlobalDescriptorTable::new();
+        let gdt = &mut GDT[cpuid];
+        *gdt = GlobalDescriptorTable::new();
 
         // Index 1: Kernel Code
-        (*gdt).set_entry(KCODE_SELECTOR_INDEX, Descriptor::kernel_code_segment());
+        gdt.set_entry(KCODE_SELECTOR_INDEX, Descriptor::kernel_code_segment());
         // Index 2: Kernel Data
-        (*gdt).set_entry(KDATA_SELECTOR_INDEX, Descriptor::kernel_data_segment());
+        gdt.set_entry(KDATA_SELECTOR_INDEX, Descriptor::kernel_data_segment());
         // Index 3: User Code
-        (*gdt).set_entry(UCODE_SELECTOR_INDEX, Descriptor::user_code_segment());
+        gdt.set_entry(UCODE_SELECTOR_INDEX, Descriptor::user_code_segment());
         // Index 4: User Data
-        (*gdt).set_entry(UDATA_SELECTOR_INDEX, Descriptor::user_data_segment());
+        gdt.set_entry(UDATA_SELECTOR_INDEX, Descriptor::user_data_segment());
 
         // Index 5: TSS (128 bit)
-        let tss = &*core::ptr::addr_of!(TSS);
+        let tss = &TSS[cpuid];
         let (tss_low, tss_high) = Descriptor::tss_segment(tss);
-        (*gdt).set_entry(TSS_SELECTOR_INDEX, tss_low);
-        (*gdt).set_entry(TSS_SELECTOR_INDEX + 1, tss_high);
+        gdt.set_entry(TSS_SELECTOR_INDEX, tss_low);
+        gdt.set_entry(TSS_SELECTOR_INDEX + 1, tss_high);
 
-        (*gdt).load();
+        gdt.load();
 
         // Reload segment registers
         reload_segments(KCODE_SELECTOR, KDATA_SELECTOR);
@@ -45,8 +36,8 @@ pub fn init() {
     }
 }
 
-pub fn tss_addr() -> u64 {
-    unsafe { core::ptr::addr_of!(TSS) as u64 }
+pub fn tss_addr(cpuid: usize) -> u64 {
+    unsafe { core::ptr::addr_of!(TSS[cpuid]) as u64 }
 }
 
 unsafe fn load_tr(selector: u16) {
@@ -68,6 +59,7 @@ pub const UDATA_SELECTOR: u16 = (UDATA_SELECTOR_INDEX << 3 | 3) as u16;
 pub const TSS_SELECTOR: u16 = (TSS_SELECTOR_INDEX << 3) as u16;
 
 #[repr(C, packed)]
+#[derive(Clone, Copy)]
 pub struct TaskStateSegment {
     reserved1: u32,                      // 4 bytes
     pub privilege_stack_table: [u64; 3], // 24 bytes. RSP0-RSP2.
@@ -93,14 +85,15 @@ impl TaskStateSegment {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct GlobalDescriptorTable {
     table: [Descriptor; 7], // Null, Kernel Code, Kernel Data, User Code, User Data, TSS (2 entries)
 }
 
 impl GlobalDescriptorTable {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
-            table: [Descriptor::default(); 7],
+            table: [Descriptor(0); 7], // Default is 0
         }
     }
 
@@ -225,8 +218,8 @@ unsafe fn reload_segments(code_selector: u16, data_selector: u16) {
     }
 }
 
-pub unsafe fn set_kernel_stack(stack: u64) {
+pub unsafe fn set_kernel_stack(stack: u64, cpuid: usize) {
     unsafe {
-        TSS.privilege_stack_table[0] = stack;
+        TSS[cpuid].privilege_stack_table[0] = stack;
     }
 }

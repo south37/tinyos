@@ -3,7 +3,7 @@ use crate::util::{
     EFER_SCE, MSR_EFER, MSR_KERNEL_GS_BASE, MSR_LSTAR, MSR_SFMASK, MSR_STAR, rdmsr, wrmsr,
 };
 
-pub fn init() {
+pub fn init(cpuid: usize) {
     unsafe {
         // Syscall Setup
         // 1. Enable EFER.SCE
@@ -25,7 +25,7 @@ pub fn init() {
 
         // 5. Setup KERNEL_GS_BASE
         // Point to TSS to find RSP0.
-        wrmsr(MSR_KERNEL_GS_BASE, tss_addr());
+        wrmsr(MSR_KERNEL_GS_BASE, tss_addr(cpuid));
     }
 }
 
@@ -34,7 +34,7 @@ unsafe extern "C" {
     fn syscall_entry();
 }
 
-use crate::proc::CURRENT_PROCESS;
+use crate::proc::mycpu;
 use crate::trap::TrapFrame;
 use crate::uart_println;
 
@@ -44,7 +44,7 @@ pub const SYS_EXEC: u64 = 59; // Linux execve is 59
 
 pub fn syscall() {
     #[allow(static_mut_refs)]
-    let p = unsafe { CURRENT_PROCESS.as_mut().unwrap() };
+    let p = unsafe { &mut *mycpu().process.unwrap() };
     let tf = unsafe {
         &mut *(((p.kstack as usize) + crate::proc::KSTACK_SIZE - core::mem::size_of::<TrapFrame>())
             as *mut TrapFrame)
@@ -74,6 +74,7 @@ fn argraw(n: usize, tf: &TrapFrame) -> u64 {
         3 => tf.r10,
         4 => tf.r8,
         5 => tf.r9,
+        6 => tf.r8, // Linux uses different regs? rdi, rsi, rdx, r10, r8, r9.
         _ => panic!("argraw"),
     }
 }
@@ -89,7 +90,7 @@ fn argptr(n: usize, tf: &TrapFrame) -> u64 {
 fn argfd(n: usize, tf: &TrapFrame) -> Result<&'static mut crate::file::File, ()> {
     let fd = argint(n, tf);
     #[allow(static_mut_refs)]
-    let p = unsafe { CURRENT_PROCESS.as_mut().unwrap() };
+    let p = unsafe { &mut *mycpu().process.unwrap() };
     if fd >= p.ofile.len() {
         return Err(());
     }

@@ -118,3 +118,19 @@ pub unsafe fn rdmsr(msr: u32) -> u64 {
     }
     ((high as u64) << 32) | (low as u64)
 }
+
+pub unsafe fn rcr3() -> u64 {
+    let val: u64;
+    unsafe {
+        core::arch::asm!("mov {}, cr3", out(reg) val);
+    }
+    val
+}
+
+pub unsafe fn micro_delay(us: u64) {
+    for _ in 0..us {
+        unsafe {
+            outb(0x80, 0); // ~1us delay
+        }
+    }
+}

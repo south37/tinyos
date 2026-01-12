@@ -1,6 +1,5 @@
 use crate::elf::{ELF_MAGIC, ElfHeader, PT_LOAD, ProgramHeader};
 use crate::fs::{self};
-use crate::proc::CURRENT_PROCESS;
 use crate::trap::TrapFrame;
 use crate::uart_println;
 use crate::util::{PG_SIZE, p2v};
@@ -207,7 +206,7 @@ pub fn exec(path: &str, _argv: &[&str]) -> isize {
     // 6. Commit Process Changes
     unsafe {
         #[allow(static_mut_refs)]
-        let p = CURRENT_PROCESS.as_mut().unwrap();
+        let p = &mut *crate::proc::mycpu().process.unwrap();
 
         // Save old pgdir to free later
         let old_pgdir = p.pgdir;

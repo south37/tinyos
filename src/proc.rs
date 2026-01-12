@@ -63,15 +63,66 @@ impl Process {
     }
 }
 
+pub const NCPU: usize = 8;
+
+#[derive(Clone, Copy)]
+pub struct Cpu {
+    pub lapicid: u32,
+    pub scheduler_context: *mut Context,
+    pub process: Option<*mut Process>, // Helper to track current process ptr
+    pub started: bool,
+    pub ncli: usize,
+    pub intena: bool,
+}
+
+impl Cpu {
+    pub const fn new() -> Self {
+        Self {
+            lapicid: 0,
+            scheduler_context: core::ptr::null_mut(),
+            process: None,
+            started: false,
+            ncli: 0,
+            intena: false,
+        }
+    }
+}
+
+pub static mut CPUS: [Cpu; NCPU] = [Cpu::new(); NCPU];
 pub static mut PROCS: [Process; NPROC] = [Process::new(); NPROC];
 static mut PID_COUNTER: usize = 0;
-pub static mut CURRENT_PROCESS: Option<&mut Process> = None;
+
+pub fn init_cpus() {
+    unsafe {
+        for (i, cpu) in CPUS.iter_mut().enumerate() {
+            cpu.lapicid = i as u32;
+        }
+    }
+}
+
+pub fn mycpu() -> &'static mut Cpu {
+    let apic_id = crate::lapic::id();
+    unsafe {
+        for cpu in CPUS.iter_mut() {
+            if cpu.lapicid == apic_id {
+                return cpu;
+            }
+        }
+        // Fallback for bootstrap before APIC init? Or just assume index 0?
+        // Actually, initial CPU often has ID 0, but not always.
+        // For now, let's assume we can always find it.
+        // If not found, it's a panic.
+        panic!("mycpu: unknown apicid {}", apic_id);
+    }
+}
 
 use crate::spinlock::SpinlockGuard;
 
 pub fn sleep<T>(chan: usize, guard: Option<SpinlockGuard<T>>) {
+    let cpu = mycpu();
     unsafe {
-        if let Some(p) = CURRENT_PROCESS.as_deref_mut() {
+        if let Some(p) = cpu.process.as_mut() {
+            let p = &mut **p;
             p.chan = chan;
             p.state = ProcessState::SLEEPING;
         }
@@ -82,8 +133,15 @@ pub fn sleep<T>(chan: usize, guard: Option<SpinlockGuard<T>>) {
         }
 
         // Swtch needs scheduler context.
-        if let Some(p) = CURRENT_PROCESS.as_mut() {
-            swtch(&mut p.context as *mut _, SCHEDULER_CONTEXT);
+        if let Some(p) = cpu.process.as_mut() {
+            let p = &mut **p;
+            swtch(&mut p.context as *mut _, cpu.scheduler_context);
+        }
+
+        // Process is running again, clear chan
+        if let Some(p) = cpu.process.as_mut() {
+            let p = &mut **p;
+            p.chan = 0;
         }
     }
 }
@@ -106,9 +164,6 @@ unsafe extern "C" {
     fn trapret();
 }
 
-// Save callee-saved registers and switch stack
-// rdi -> old context
-// rsi -> new context
 // fn swtch(old: *mut *mut Context, new: *mut Context);
 global_asm!(
     ".global swtch",
@@ -132,17 +187,17 @@ global_asm!(
 
 pub fn init_process(allocator: &mut Allocator) {
     // Find unused process
-    let mut p: Option<&mut Process> = None;
+    let mut p_option: Option<&mut Process> = None;
     unsafe {
         for proc in PROCS.iter_mut() {
             if proc.state == ProcessState::UNUSED {
-                p = Some(proc);
+                p_option = Some(proc);
                 break;
             }
         }
     }
 
-    if let Some(p) = p {
+    if let Some(p) = p_option {
         unsafe {
             PID_COUNTER += 1;
             p.pid = PID_COUNTER;
@@ -215,13 +270,6 @@ pub fn init_process(allocator: &mut Allocator) {
         p.name[2] = b'i';
         p.name[3] = b't';
 
-        // Init file descriptors (stdin, stdout, stderr)
-        // We need to allocate a file that points to console
-        // For now, let's just create one file for console and share it?
-        // Actually, we must allocate distinct File structs or at least distinct references if we want to follow unix.
-        // But File is static mutable reference?
-        // `filealloc` returns `&'static mut File`.
-
         for i in 0..3 {
             if let Some(f) = crate::file::filealloc() {
                 f.f_type = crate::file::FileType::Device;
@@ -234,14 +282,15 @@ pub fn init_process(allocator: &mut Allocator) {
     }
 }
 
-// Scheduler context (per-cpu). For now just a static variable?
-// Since we are single core and running on kstack of current process or scheduler loop.
-// We need a place to save the scheduler's own context when we switch TO a process.
-static mut SCHEDULER_CONTEXT: *mut Context = core::ptr::null_mut();
-
 pub fn scheduler() {
-    uart_println!("INFO: Scheduler starting...");
+    let cpu = mycpu();
+    cpu.process = None; // Ensure no process running
+
+    uart_println!("INFO: Scheduler starting on CPU {}", cpu.lapicid);
     loop {
+        // Enable interrupts to allow IRQs to wake us up
+        unsafe { core::arch::asm!("sti") };
+
         let mut ran_process = false;
         unsafe {
             for i in 0..NPROC {
@@ -249,32 +298,28 @@ pub fn scheduler() {
                 if p.state == ProcessState::RUNNABLE {
                     p.state = ProcessState::RUNNING;
 
-                    CURRENT_PROCESS = Some(p);
+                    cpu.process = Some(p as *mut Process);
 
                     // Switch to user page table
-                    let p_ptr = CURRENT_PROCESS.as_mut().unwrap();
-                    vm::switch(p_ptr.pgdir);
+                    vm::switch(p.pgdir);
 
                     // Set Kernel Stack in TSS
-                    let kstack_top = p_ptr.kstack as usize + KSTACK_SIZE;
-                    crate::gdt::set_kernel_stack(kstack_top as u64);
+                    let kstack_top = p.kstack as usize + KSTACK_SIZE;
+                    crate::gdt::set_kernel_stack(kstack_top as u64, cpu.lapicid as usize);
 
                     // Switch to process
-                    swtch(core::ptr::addr_of_mut!(SCHEDULER_CONTEXT), p_ptr.context);
+                    swtch(&mut cpu.scheduler_context as *mut _, p.context);
 
                     // Back from process
-                    CURRENT_PROCESS = None;
+                    cpu.process = None;
 
                     ran_process = true;
                 }
             }
         }
-        if !ran_process {
-            // Enable interrupts to allow IRQs to wake us up
-            unsafe { core::arch::asm!("sti") };
-            // Wait for interrupt
-            unsafe { core::arch::asm!("hlt") };
-        }
+        // if !ran_process {
+        // unsafe { core::arch::asm!("hlt") };
+        // }
     }
 }
 

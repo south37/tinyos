@@ -3,24 +3,32 @@
 use crate::util::{IRQ_ERROR, IRQ_TIMER, LAPIC_ADDR, T_IRQ0};
 
 // Local APIC registers
-const ID: u32 = 0x0020; // ID
-const VER: u32 = 0x0030; // Version
-const TPR: u32 = 0x0080; // Task Priority
-const EOI: u32 = 0x00B0; // EOI
-const SVR: u32 = 0x00F0; // Spurious Interrupt Vector
-const ESR: u32 = 0x0280; // Error Status
-const ICRLO: u32 = 0x0300; // Interrupt Command
-const ICRHI: u32 = 0x0310; // Interrupt Command [63:32]
-const TIMER: u32 = 0x0320; // Local Vector Table 0 (TIMER)
-const PCINT: u32 = 0x0340; // Performance Counter LVT
-const LINT0: u32 = 0x0350; // Local Vector Table 1 (LINT0)
-const LINT1: u32 = 0x0360; // Local Vector Table 2 (LINT1)
-const ERROR: u32 = 0x0370; // Local Vector Table 3 (ERROR)
-const TICR: u32 = 0x0380; // Timer Initial Count
-const TCCR: u32 = 0x0390; // Timer Current Count
-const TDCR: u32 = 0x03E0; // Timer Divide Configuration
+pub const ID: u32 = 0x0020; // ID
+pub const VER: u32 = 0x0030; // Version
+pub const TPR: u32 = 0x0080; // Task Priority
+pub const EOI: u32 = 0x00B0; // EOI
+pub const SVR: u32 = 0x00F0; // Spurious Interrupt Vector
+pub const ESR: u32 = 0x0280; // Error Status
+pub const ICRLO: u32 = 0x0300; // Interrupt Command
+pub const ICRHI: u32 = 0x0310; // Interrupt Command [63:32]
+pub const TIMER: u32 = 0x0320; // Local Vector Table 0 (TIMER)
+pub const PCINT: u32 = 0x0340; // Performance Counter LVT
+pub const LINT0: u32 = 0x0350; // Local Vector Table 1 (LINT0)
+pub const LINT1: u32 = 0x0360; // Local Vector Table 2 (LINT1)
+pub const ERROR: u32 = 0x0370; // Local Vector Table 3 (ERROR)
+pub const TICR: u32 = 0x0380; // Timer Initial Count
+pub const TCCR: u32 = 0x0390; // Timer Current Count
+pub const TDCR: u32 = 0x03E0; // Timer Divide Configuration
 
-const MASKED: u32 = 0x10000;
+pub const ICR_INIT: u32 = 0x00000500;
+pub const ICR_STARTUP: u32 = 0x00000600;
+pub const ICR_DELIVS: u32 = 0x00001000;
+pub const ICR_ASSERT: u32 = 0x00004000;
+pub const ICR_DEASSERT: u32 = 0x00000000;
+pub const ICR_LEVEL: u32 = 0x00008000;
+pub const ICR_BCAST: u32 = 0x00080000;
+
+pub const MASKED: u32 = 0x10000;
 
 pub fn init() {
     let lapic = crate::util::io2v(LAPIC_ADDR);
@@ -85,4 +93,21 @@ unsafe fn write(lapic: usize, reg: u32, val: u32) {
 
 unsafe fn read(lapic: usize, reg: u32) -> u32 {
     unsafe { core::ptr::read_volatile((lapic + reg as usize) as *const u32) }
+}
+
+pub fn id() -> u32 {
+    let lapic = crate::util::io2v(LAPIC_ADDR);
+    unsafe { (read(lapic, ID) >> 24) & 0xFF }
+}
+
+// Helper to write to LAPIC from other modules (like for checks)
+pub unsafe fn write_reg(reg: u32, val: u32) {
+    let lapic = crate::util::io2v(LAPIC_ADDR);
+    write(lapic, reg, val);
+}
+
+// Helper to read (for checks)
+pub unsafe fn read_reg(reg: u32) -> u32 {
+    let lapic = crate::util::io2v(LAPIC_ADDR);
+    read(lapic, reg)
 }

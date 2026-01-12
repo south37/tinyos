@@ -64,8 +64,10 @@ pub extern "C" fn kmain() -> ! {
     }
     uart_println!("INFO: Page table loaded");
 
-    gdt::init();
+    gdt::init(0);
     uart_println!("INFO: GDT loaded");
+
+    proc::init_cpus();
 
     lapic::init();
     uart_println!("INFO: LAPIC initialized");
@@ -76,7 +78,7 @@ pub extern "C" fn kmain() -> ! {
     trap::init();
     uart_println!("INFO: Traps initialized");
 
-    syscall::init();
+    syscall::init(0);
     uart_println!("INFO: Syscalls initialized");
 
     bio::binit();
@@ -153,12 +155,104 @@ pub extern "C" fn kmain() -> ! {
         core::arch::asm!("sti");
     }
 
+    start_aps();
+
     proc::scheduler();
 
     loop {
         unsafe {
             core::arch::asm!("hlt");
         }
+    }
+}
+
+fn start_aps() {
+    uart_println!("INFO: Starting APs...");
+    let entry_code = include_bytes!("../asm/entryother");
+    let code_ptr = p2v(0x7000) as *mut u8;
+
+    unsafe {
+        core::ptr::copy_nonoverlapping(entry_code.as_ptr(), code_ptr, entry_code.len());
+    }
+
+    for i in 0..proc::NCPU {
+        if i == 0 {
+            continue;
+        } // Skip BSP (assumed 0)
+
+        let mut allocator = crate::allocator::ALLOCATOR.lock();
+        let stack = allocator.kalloc();
+        if stack.is_null() {
+            uart_println!("ERROR: Failed to allocate stack for CPU {}", i);
+            continue;
+        }
+
+        let stack_top = stack as usize + proc::KSTACK_SIZE;
+
+        // Pass parameters to entryother at 0x7000 - ...
+        unsafe {
+            let code_phys = 0x7000;
+            *(p2v(code_phys - 8) as *mut u64) = stack_top as u64;
+            *(p2v(code_phys - 16) as *mut u32) = util::rcr3() as u32; // CR3
+            *(p2v(code_phys - 24) as *mut u64) = mpenter as *const () as u64;
+        }
+
+        let lapicid = i as u32; // Assuming linear mapping for now.
+
+        // Send INIT IPI
+        unsafe {
+            lapic::write_reg(lapic::ICRHI, lapicid << 24);
+            lapic::write_reg(
+                lapic::ICRLO,
+                lapic::ICR_INIT | lapic::ICR_LEVEL | lapic::ICR_ASSERT,
+            );
+            util::micro_delay(200);
+            lapic::write_reg(lapic::ICRLO, lapic::ICR_INIT | lapic::ICR_LEVEL);
+            util::micro_delay(10000); // 10ms
+
+            // Send Startup IPI (twice)
+            for _ in 0..2 {
+                lapic::write_reg(lapic::ICRHI, lapicid << 24);
+                lapic::write_reg(lapic::ICRLO, lapic::ICR_STARTUP | (0x7000 >> 12));
+                util::micro_delay(200);
+            }
+        }
+
+        // Wait for CPU to start?
+        // We can check proc::CPUS[i].started if we had it exposed.
+        // For now just wait and hope.
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn mpenter() -> ! {
+    // AP Entry Point
+    // Get CPUID first
+    let cpuid = crate::lapic::id() as usize;
+
+    // 1. Enable paging (already done in entryother)
+    // 2. Load GDT (per-CPU)
+    crate::gdt::init(cpuid);
+
+    // 3. Init LAPIC
+    crate::lapic::init();
+
+    // 4. Init Traps (IDT)
+    crate::trap::init();
+
+    // 5. Init Syscall (MSRs)
+    crate::syscall::init(cpuid);
+
+    uart_println!("INFO: CPU {} started!", cpuid);
+
+    // Mark started
+    // unsafe { proc::CPUS[cpuid as usize].started = true; }
+    // We need to access CPUS.
+
+    crate::proc::scheduler();
+
+    loop {
+        unsafe { core::arch::asm!("hlt") }
     }
 }
 

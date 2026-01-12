@@ -37,7 +37,7 @@ pub fn consoleread(dst: u64, n: usize) -> usize {
     while count < n {
         // Wait for input
         while guard.r == guard.w {
-            if unsafe { crate::proc::killed(crate::proc::CURRENT_PROCESS.as_deref().unwrap()) } {
+            if unsafe { crate::proc::killed(&*crate::proc::mycpu().process.unwrap()) } {
                 return 0; // -1?
             }
             crate::proc::sleep(
