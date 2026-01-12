@@ -96,6 +96,10 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
             crate::lapic::eoi();
             // uart_println!("EBUG: Timer");
         }
+        n if n == (T_IRQ0 + 4) as u64 => {
+            crate::uart::uartintr();
+            crate::lapic::eoi();
+        }
         n if n == (T_IRQ0 + IRQ_VIRTIO) as u64 => {
             unsafe { crate::virtio::intr() };
             crate::lapic::eoi();

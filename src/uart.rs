@@ -7,23 +7,51 @@ pub struct Uart;
 impl fmt::Write for Uart {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for b in s.bytes() {
-            unsafe {
-                uart_write_byte(b);
-            }
+            uart_putc(b);
         }
         Ok(())
     }
 }
 
-unsafe fn uart_write_byte(byte: u8) {
-    // Transmit Holding Register (THR)
+pub fn uart_putc(byte: u8) {
     unsafe {
-        core::arch::asm!(
-            "out dx, al",
-            in("dx") COM1,
-            in("al") byte,
-        );
+        // Wait for THR empty
+        while (inb(COM1 + 5) & 0x20) == 0 {}
+        outb(COM1, byte);
     }
+}
+
+pub fn uart_getc() -> Option<u8> {
+    unsafe {
+        if (inb(COM1 + 5) & 0x01) == 0 {
+            None
+        } else {
+            Some(inb(COM1))
+        }
+    }
+}
+
+// Interrupt handler
+pub fn uartintr() {
+    crate::console::consoleintr(uart_getc);
+}
+
+unsafe fn outb(port: u16, val: u8) {
+    core::arch::asm!(
+        "out dx, al",
+        in("dx") port,
+        in("al") val,
+    );
+}
+
+unsafe fn inb(port: u16) -> u8 {
+    let ret: u8;
+    core::arch::asm!(
+        "in al, dx",
+        out("al") ret,
+        in("dx") port,
+    );
+    ret
 }
 
 #[doc(hidden)]

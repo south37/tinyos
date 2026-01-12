@@ -39,9 +39,10 @@ void exec(char *path, char **argv) {
 // But calling an unknown syscall will print an error in kernel.
 
 void start() {
-  // Trigger unknown syscall to verify we are running
-  syscall0(100);
+  char *msg = "init: starting\n";
+  syscall3(SYS_WRITE, 1, (long)msg, 15);
 
-  while (1) {
+  for (;;) {
+    // Yield?
   }
 }

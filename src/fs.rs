@@ -320,6 +320,61 @@ pub fn readi(ip: &Inode, dst: *mut u8, off: u32, n: u32) -> u32 {
     tot
 }
 
+pub fn writei(ip: &Inode, src: *const u8, off: u32, n: u32) -> u32 {
+    let mut guard = ip.ilock();
+    let mut tot = 0;
+    let mut offset = off;
+    let mut m = n;
+
+    // TODO: support max file size check (NDIR + IND * ...)
+
+    let mut src_ptr = src;
+
+    while m > 0 {
+        let b = bmap(&guard, offset / BSIZE as u32, ip.dev); // TODO: bmap alloc if 0?? bmap doesn't alloc yet.
+        // For now, bmap returns 0 if not allocated. We need bmap to allocate.
+        // Simplification: Assume file has blocks or fail.
+        // But write usually extends.
+
+        if b == 0 {
+            // Need to allocate block
+            // Missing balloc implementation.
+            // For this task (console support), writei to file is secondary.
+            // But if we want to write to file, we need balloc.
+            // Let's implement basic writing to existing blocks first, or panic if extending.
+            break;
+        }
+
+        let buf_idx = crate::bio::bread(ip.dev, b);
+        let start = (offset % BSIZE as u32) as usize;
+        let len = core::cmp::min(m as usize, BSIZE - start);
+
+        unsafe {
+            let mut cache = crate::bio::BCACHE.lock();
+            let dst = cache.bufs[buf_idx].data.as_mut_ptr().add(start);
+            core::ptr::copy_nonoverlapping(src_ptr, dst, len);
+        }
+        crate::bio::bwrite(buf_idx); // Write back immediately for now
+        crate::bio::brelse(buf_idx);
+
+        tot += len as u32;
+        offset += len as u32;
+        m -= len as u32;
+        src_ptr = unsafe { src_ptr.add(len) };
+    }
+
+    if offset > guard.i_size {
+        guard.i_size = offset;
+        // iupdate ?? We need to persist size change to disk inode.
+        // ip.iupdate();
+        // Since we don't have iupdate yet, we might lose size update on crash, but it should be in memory.
+        // We really need iupdate to write DiskInode back.
+        // But for now, let's just leave it in memory.
+    }
+
+    tot
+}
+
 // Return the disk block address of the nth block in inode.
 // Returns 0 if no block allocated.
 // Supports Direct blocks (0-11) and Singly Indirect (12).

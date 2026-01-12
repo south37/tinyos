@@ -33,6 +33,9 @@ pub enum ProcessState {
     ZOMBIE,
 }
 
+pub const NFILE: usize = 16;
+use crate::file::File;
+
 #[derive(Clone, Copy)]
 pub struct Process {
     pub state: ProcessState,
@@ -42,6 +45,7 @@ pub struct Process {
     pub pid: usize,
     pub chan: usize,
     pub name: [u8; 16],
+    pub ofile: [Option<*mut File>; NFILE],
 }
 
 impl Process {
@@ -54,6 +58,7 @@ impl Process {
             pid: 0,
             chan: 0,
             name: [0; 16],
+            ofile: [None; NFILE],
         }
     }
 }
@@ -209,6 +214,23 @@ pub fn init_process(allocator: &mut Allocator) {
         p.name[1] = b'n';
         p.name[2] = b'i';
         p.name[3] = b't';
+
+        // Init file descriptors (stdin, stdout, stderr)
+        // We need to allocate a file that points to console
+        // For now, let's just create one file for console and share it?
+        // Actually, we must allocate distinct File structs or at least distinct references if we want to follow unix.
+        // But File is static mutable reference?
+        // `filealloc` returns `&'static mut File`.
+
+        for i in 0..3 {
+            if let Some(f) = crate::file::filealloc() {
+                f.f_type = crate::file::FileType::Device;
+                f.major = 1; // Console
+                f.readable = true;
+                f.writable = true;
+                p.ofile[i] = Some(f as *mut _);
+            }
+        }
     }
 }
 
@@ -254,4 +276,8 @@ pub fn scheduler() {
             unsafe { core::arch::asm!("hlt") };
         }
     }
+}
+
+pub unsafe fn killed(p: &Process) -> bool {
+    p.state == ProcessState::ZOMBIE // Placeholder
 }

@@ -38,6 +38,8 @@ use crate::proc::CURRENT_PROCESS;
 use crate::trap::TrapFrame;
 use crate::uart_println;
 
+pub const SYS_READ: u64 = 0;
+pub const SYS_WRITE: u64 = 1;
 pub const SYS_EXEC: u64 = 59; // Linux execve is 59
 
 pub fn syscall() {
@@ -52,6 +54,8 @@ pub fn syscall() {
     uart_println!("DEBUG: Syscall: {}", num);
 
     let ret = match num {
+        SYS_READ => sys_read(tf),
+        SYS_WRITE => sys_write(tf),
         SYS_EXEC => sys_exec(tf),
         _ => {
             uart_println!("Unknown syscall {}", num);
@@ -62,17 +66,42 @@ pub fn syscall() {
     tf.rax = ret as u64;
 }
 
-fn argstr(n: usize, tf: &TrapFrame) -> Result<&str, ()> {
-    // Fetch nth argument as string pointer
-    let ptr_val = match n {
+fn argraw(n: usize, tf: &TrapFrame) -> u64 {
+    match n {
         0 => tf.rdi,
         1 => tf.rsi,
         2 => tf.rdx,
         3 => tf.r10,
         4 => tf.r8,
         5 => tf.r9,
-        _ => return Err(()),
-    };
+        _ => panic!("argraw"),
+    }
+}
+
+fn argint(n: usize, tf: &TrapFrame) -> usize {
+    argraw(n, tf) as usize
+}
+
+fn argptr(n: usize, tf: &TrapFrame) -> u64 {
+    argraw(n, tf)
+}
+
+fn argfd(n: usize, tf: &TrapFrame) -> Result<&'static mut crate::file::File, ()> {
+    let fd = argint(n, tf);
+    #[allow(static_mut_refs)]
+    let p = unsafe { CURRENT_PROCESS.as_mut().unwrap() };
+    if fd >= p.ofile.len() {
+        return Err(());
+    }
+    match p.ofile[fd] {
+        Some(f_ptr) => unsafe { Ok(&mut *f_ptr) },
+        None => Err(()),
+    }
+}
+
+fn argstr(n: usize, tf: &TrapFrame) -> Result<&str, ()> {
+    // Fetch nth argument as string pointer
+    let ptr_val = argptr(n, tf);
 
     // Verify pointer (very basic verification)
     if ptr_val == 0 {
@@ -103,4 +132,24 @@ fn sys_exec(tf: &TrapFrame) -> isize {
     };
     // Argv ignored for now
     crate::exec::exec(path, &[])
+}
+
+fn sys_read(tf: &TrapFrame) -> isize {
+    let f = match argfd(0, tf) {
+        Ok(f) => f,
+        Err(_) => return -1,
+    };
+    let ptr = argptr(1, tf);
+    let n = argint(2, tf);
+    crate::file::fileread(f, ptr, n)
+}
+
+fn sys_write(tf: &TrapFrame) -> isize {
+    let f = match argfd(0, tf) {
+        Ok(f) => f,
+        Err(_) => return -1,
+    };
+    let ptr = argptr(1, tf);
+    let n = argint(2, tf);
+    crate::file::filewrite(f, ptr, n)
 }
