@@ -2,9 +2,18 @@ use crate::allocator::Allocator;
 use crate::uart_println;
 use crate::util::{PG_SIZE, p2v, v2p};
 
+static mut KPGDIR: *mut PageTable = core::ptr::null_mut();
+
 pub fn init(allocator: &mut Allocator) {
     let pgdir = kvm_create(allocator).expect("kvm_create failed");
+    unsafe {
+        KPGDIR = pgdir;
+    }
     switch(pgdir);
+}
+
+pub fn kpgdir() -> *mut PageTable {
+    unsafe { KPGDIR }
 }
 
 pub fn kvm_create(allocator: &mut Allocator) -> Option<*mut PageTable> {

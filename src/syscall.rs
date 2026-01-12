@@ -131,8 +131,11 @@ fn sys_exec(tf: &TrapFrame) -> isize {
         Ok(s) => s,
         Err(_) => return -1,
     };
+    uart_println!("DEBUG: sys_exec path='{}'", path);
     // Argv ignored for now
-    crate::exec::exec(path, &[])
+    let ret = crate::exec::exec(path, &[]);
+    uart_println!("DEBUG: sys_exec ret={}", ret);
+    ret
 }
 
 fn sys_read(tf: &TrapFrame) -> isize {

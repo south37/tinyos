@@ -19,7 +19,7 @@ else
 	CARGO_FLAGS :=
 endif
 
-QEMUOPTS := -m $(PHYS_MEM) -smp 2 -net none -nographic -serial mon:stdio
+QEMUOPTS := -m $(PHYS_MEM) -smp 1 -net none -nographic -serial mon:stdio
 # Default QEMU debug flags (can be overridden)
 QEMU_DEBUG ?= guest_errors
 

@@ -91,6 +91,7 @@ impl Cpu {
 
 pub static mut CPUS: [Cpu; NCPU] = [Cpu::new(); NCPU];
 pub static mut PROCS: [Process; NPROC] = [Process::new(); NPROC];
+pub static PROCS_LOCK: crate::spinlock::Spinlock<()> = crate::spinlock::Spinlock::new(());
 static mut PID_COUNTER: usize = 0;
 pub static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
@@ -126,6 +127,13 @@ use crate::spinlock::SpinlockGuard;
 
 pub fn sleep<T>(chan: usize, guard: Option<SpinlockGuard<T>>) {
     let cpu = mycpu();
+
+    // Acquire ptable lock
+    let ptable_guard = PROCS_LOCK.lock();
+
+    // Release guard
+    drop(guard);
+
     unsafe {
         if let Some(p) = cpu.process.as_mut() {
             let p = &mut **p;
@@ -133,26 +141,18 @@ pub fn sleep<T>(chan: usize, guard: Option<SpinlockGuard<T>>) {
             p.state = ProcessState::SLEEPING;
         }
 
-        // Release lock if provided
-        if let Some(g) = guard {
-            drop(g);
-        }
+        sched(ptable_guard);
 
-        // Swtch needs scheduler context.
-        if let Some(p) = cpu.process.as_mut() {
-            let p = &mut **p;
-            swtch(&mut p.context as *mut _, cpu.scheduler_context);
-        }
-
-        // Process is running again, clear chan
         if let Some(p) = cpu.process.as_mut() {
             let p = &mut **p;
             p.chan = 0;
         }
     }
+    // ptable_guard dropped here
 }
 
 pub fn wakeup(chan: usize) {
+    let _guard = PROCS_LOCK.lock();
     unsafe {
         for p in PROCS.iter_mut() {
             if p.state == ProcessState::SLEEPING && p.chan == chan {
@@ -170,7 +170,51 @@ unsafe extern "C" {
     fn trapret();
 }
 
-// fn swtch(old: *mut *mut Context, new: *mut Context);
+pub unsafe fn sched(guard: SpinlockGuard<()>) {
+    let cpu = mycpu();
+
+    if let Some(p) = cpu.process.as_mut() {
+        let p = &mut **p;
+
+        if cpu.ncli != 1 {
+            panic!("sched: ncli {}", cpu.ncli);
+        }
+        if p.state == ProcessState::RUNNING {
+            panic!("sched: process running");
+        }
+        if unsafe { crate::util::readeflags() } & 0x200 != 0 {
+            panic!("sched: interrupts enabled");
+        }
+
+        swtch(&mut p.context as *mut _, cpu.scheduler_context);
+    }
+    drop(guard);
+}
+
+pub fn yield_proc() {
+    let guard = PROCS_LOCK.lock();
+    let cpu = mycpu();
+    unsafe {
+        if let Some(p) = cpu.process.as_mut() {
+            let p = &mut **p;
+            p.state = ProcessState::RUNNABLE;
+            sched(guard);
+        } else {
+            drop(guard);
+        }
+    }
+}
+
+pub fn forkret() {
+    unsafe {
+        PROCS_LOCK.unlock();
+    }
+
+    unsafe {
+        trapret();
+    }
+}
+
 global_asm!(
     ".global swtch",
     "swtch:",
@@ -259,9 +303,9 @@ pub fn init_process(allocator: &mut Allocator) {
         let context_addr = tf_addr - core::mem::size_of::<Context>();
         p.context = context_addr as *mut Context;
 
-        // Set context to return to trapret
+        // Set context to return to forkret
         unsafe {
-            (*p.context).rip = trapret as *const () as usize as u64;
+            (*p.context).rip = forkret as *const () as usize as u64;
             (*p.context).r15 = 0;
             (*p.context).r14 = 0;
             (*p.context).r13 = 0;
@@ -297,6 +341,10 @@ pub fn scheduler() {
         // Enable interrupts to allow IRQs to wake us up
         unsafe { core::arch::asm!("sti") };
 
+        // Acquire PTABLE LOCK
+        let mut guard = PROCS_LOCK.lock();
+
+        let mut ran_process = false;
         unsafe {
             for i in 0..NPROC {
                 let p = &mut PROCS[i];
@@ -316,9 +364,19 @@ pub fn scheduler() {
                     swtch(&mut cpu.scheduler_context as *mut _, p.context);
 
                     // Back from process
+                    vm::switch(crate::vm::kpgdir()); // switch back to kvm
+
                     cpu.process = None;
+
+                    ran_process = true;
                 }
             }
+        }
+        // Release lock
+        drop(guard);
+
+        if !ran_process {
+            unsafe { core::arch::asm!("hlt") };
         }
     }
 }

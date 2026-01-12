@@ -78,13 +78,19 @@ struct VirtioDriver {
     used_idx: u16,
 }
 
+use crate::spinlock::Spinlock;
+
+pub static VIRTIO_LOCK: Spinlock<()> = Spinlock::new(());
+
 pub unsafe fn intr() {
     let io_base = unsafe { VIRTIO_IO_BASE };
     if io_base != 0 {
         let status = unsafe { inb(io_base + VIRTIO_REG_ISR_STATUS) };
         if status & 1 != 0 || status & 3 != 0 {
             // Wakeup waiting process
+            let guard = VIRTIO_LOCK.lock();
             unsafe { crate::proc::wakeup(addr_of!(VIRTIO_BLK_DRIVER) as usize) };
+            drop(guard);
         }
     }
 }
@@ -273,19 +279,22 @@ impl VirtioDriver {
 
         let used = self.queue_used;
 
+        let mut guard = VIRTIO_LOCK.lock();
+
         loop {
             let val = core::ptr::read_volatile(&(*used).idx);
             if val != self.used_idx {
+                drop(guard);
                 break;
             }
             // Option<Box<T>> is guaranteed to be 0 for None.
             if crate::proc::mycpu().process.is_some() {
-                crate::proc::sleep(
-                    addr_of!(VIRTIO_BLK_DRIVER) as usize,
-                    None::<crate::spinlock::SpinlockGuard<()>>,
-                );
+                crate::proc::sleep(addr_of!(VIRTIO_BLK_DRIVER) as usize, Some(guard));
+                guard = VIRTIO_LOCK.lock();
             } else {
+                drop(guard);
                 core::arch::asm!("pause");
+                guard = VIRTIO_LOCK.lock();
             }
         }
 

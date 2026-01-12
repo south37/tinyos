@@ -47,6 +47,11 @@ impl<T> Spinlock<T> {
     pub fn as_ptr(&self) -> *mut T {
         self.data.get()
     }
+
+    pub unsafe fn unlock(&self) {
+        self.lock.store(false, Ordering::Release);
+        pop_cli();
+    }
 }
 
 impl<'a, T> Deref for SpinlockGuard<'a, T> {
