@@ -143,3 +143,11 @@ pub unsafe fn readeflags() -> u64 {
     }
     flags
 }
+
+pub unsafe fn rcr2() -> u64 {
+    let val: u64;
+    unsafe {
+        core::arch::asm!("mov {}, cr2", out(reg) val);
+    }
+    val
+}

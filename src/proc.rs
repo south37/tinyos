@@ -163,13 +163,6 @@ pub fn wakeup(chan: usize) {
     }
 }
 
-unsafe extern "C" {
-    // Defined in this file.
-    fn swtch(old: *mut *mut Context, new: *mut Context);
-    // Defined in asm/vectors.S
-    fn trapret();
-}
-
 pub unsafe fn sched(guard: SpinlockGuard<()>) {
     let cpu = mycpu();
 
@@ -205,14 +198,27 @@ pub fn yield_proc() {
     }
 }
 
-pub fn forkret() {
+#[unsafe(no_mangle)]
+extern "C" fn release_procs_lock() {
     unsafe {
+        crate::uart_println!("DEBUG: forkret release_lock called");
         PROCS_LOCK.unlock();
     }
+}
 
-    unsafe {
-        trapret();
-    }
+unsafe extern "C" {
+    fn forkret();
+}
+
+global_asm!(
+    ".global forkret",
+    "forkret:",
+    "call release_procs_lock",
+    "jmp trapret"
+);
+
+unsafe extern "C" {
+    fn swtch(old: *mut *mut Context, new: *mut Context);
 }
 
 global_asm!(
@@ -263,6 +269,7 @@ pub fn init_process(allocator: &mut Allocator) {
             p.state = ProcessState::UNUSED;
             return;
         }
+        uart_println!("DEBUG: kstack: 0x{:x}", p.kstack as usize);
 
         // Init code
         let initcode: &[u8] = include_bytes!("../asm/initcode");

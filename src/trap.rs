@@ -108,7 +108,9 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
             crate::syscall::syscall();
         }
         _ => {
-            uart_println!("Trap {}", tf.trap_num);
+            uart_println!("Trap {} on CPU {}", tf.trap_num, crate::lapic::id());
+            uart_println!("Error Code: {:x}", tf.error_code);
+            uart_println!("CR2: {:x}", unsafe { crate::util::rcr2() });
             // Infinite loop on unhandled trap
             loop {}
         }
