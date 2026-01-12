@@ -7,26 +7,37 @@ typedef long long int64_t;
 #define SYS_EXEC 59
 #define SYS_WRITE 1
 
-void syscall0(int64_t num) {
-  __asm__ volatile("syscall" : : "a"(num) : "rcx", "r11", "memory");
+int64_t syscall0(int64_t num) {
+  int64_t ret;
+  __asm__ volatile("syscall" : "=a"(ret) : "a"(num) : "rcx", "r11", "memory");
+  return ret;
 }
 
-void syscall1(int64_t num, int64_t a1) {
-  __asm__ volatile("syscall" : : "a"(num), "D"(a1) : "rcx", "r11", "memory");
-}
-
-void syscall2(int64_t num, int64_t a1, int64_t a2) {
+int64_t syscall1(int64_t num, int64_t a1) {
+  int64_t ret;
   __asm__ volatile("syscall"
-                   :
+                   : "=a"(ret)
+                   : "a"(num), "D"(a1)
+                   : "rcx", "r11", "memory");
+  return ret;
+}
+
+int64_t syscall2(int64_t num, int64_t a1, int64_t a2) {
+  int64_t ret;
+  __asm__ volatile("syscall"
+                   : "=a"(ret)
                    : "a"(num), "D"(a1), "S"(a2)
                    : "rcx", "r11", "memory");
+  return ret;
 }
 
-void syscall3(int64_t num, int64_t a1, int64_t a2, int64_t a3) {
+int64_t syscall3(int64_t num, int64_t a1, int64_t a2, int64_t a3) {
+  int64_t ret;
   __asm__ volatile("syscall"
-                   :
+                   : "=a"(ret)
                    : "a"(num), "D"(a1), "S"(a2), "d"(a3)
                    : "rcx", "r11", "memory");
+  return ret;
 }
 
 void exec(char *path, char **argv) {

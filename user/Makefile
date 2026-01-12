@@ -1,6 +1,6 @@
 
 CC = gcc
-CFLAGS = -std=c99 -O2 -fno-builtin -fno-stack-protector -nostdlib -m64 -mcmodel=small -fno-pic -fno-pie
+CFLAGS = -std=c99 -O2 -fno-builtin -fno-stack-protector -nostdlib -m64 -mcmodel=small -fno-pic -fno-pie -no-pie
 LDFLAGS = -e start -T user.ld
 
 UPROGS=\
