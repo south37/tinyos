@@ -5,14 +5,14 @@ A small OS written in Rust.
 
 ```
 # Create disk.img
-$ ./scripts/mkfs.sh
+$ make fs
 
 # Build kernel
-$ ./scripts/build.sh
+$ make kernel
 ```
 
 # How to run
 
 ```
-$ script/run
+$ make run
 ```
