@@ -93,17 +93,15 @@ unsafe extern "C" {
 extern "C" fn trap_handler(tf: &mut TrapFrame) {
     match tf.trap_num {
         n if n == (T_IRQ0 + IRQ_TIMER) as u64 => {
-            // Ack LAPIC
             crate::lapic::eoi();
             // uart_println!("EBUG: Timer");
         }
         n if n == (T_IRQ0 + IRQ_VIRTIO) as u64 => {
+            unsafe { crate::virtio::intr() };
             crate::lapic::eoi();
             // uart_println!("DEBUG: Virtio Interrupt");
-            unsafe { crate::virtio::intr() };
         }
         n if n == T_SYSCALL as u64 => {
-            // uart_println!("DEBUG: Syscall");
             crate::syscall::syscall();
         }
         _ => {

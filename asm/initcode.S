@@ -1,3 +1,4 @@
+# Entry point of init process. Used by proc::init_process.
 .global start
 start:
     # exec("/init", 0)

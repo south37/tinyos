@@ -15,15 +15,15 @@ mboot_header:
 
 # Null segment descriptor
 #define SEG_NULLASM                                                            \
-  .word 0, 0;                                                                  \
-  .byte 0, 0, 0, 0
+    .word 0, 0;                                                                  \
+    .byte 0, 0, 0, 0
 
 # Segment descriptor for long mode (64-bit).
 # The 0x90 means the presence of P and S. If l=1, the descriptor
 # defines a 64-bit code segment.
 #define SEG64_ASM(type, l)                                                     \
-  .word 0, 0;                                                                  \
-  .byte 0, (0x90 | (type)), (l << 5), 0
+    .word 0, 0;                                                                  \
+    .byte 0, (0x90 | (type)), (l << 5), 0
 
 #define SEG_KCODE 1   // kernel code
 #define SEG_KDATA 2   // kernel data+stack
