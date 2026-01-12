@@ -10,7 +10,7 @@ pub struct Run {
     pub next: *const Run,
 }
 
-pub static ALLOCATOR: Spinlock<Allocator> = Spinlock::new(Allocator::new());
+pub static ALLOCATOR: Spinlock<Allocator> = Spinlock::new(Allocator::new(), "ALLOCATOR");
 
 impl Allocator {
     pub const fn new() -> Self {

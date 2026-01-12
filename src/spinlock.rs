@@ -6,6 +6,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Spinlock<T> {
     lock: AtomicBool,
+    name: &'static str,
     data: UnsafeCell<T>,
 }
 
@@ -18,15 +19,19 @@ unsafe impl<T> Sync for Spinlock<T> {}
 unsafe impl<T> Send for Spinlock<T> {}
 
 impl<T> Spinlock<T> {
-    pub const fn new(data: T) -> Self {
+    pub const fn new(data: T, name: &'static str) -> Self {
         Self {
             lock: AtomicBool::new(false),
+            name,
             data: UnsafeCell::new(data),
         }
     }
 
     pub fn lock(&self) -> SpinlockGuard<T> {
         push_cli(); // Disable interrupts to avoid deadlock
+        if self.name != "UART_TX" {
+            // crate::uart_println!("LOCK: {} ncli={}", self.name, mycpu().ncli);
+        }
 
         while self
             .lock
@@ -44,11 +49,18 @@ impl<T> Spinlock<T> {
         }
     }
 
+    pub fn holding(&self) -> bool {
+        self.lock.load(Ordering::Relaxed)
+    }
+
     pub fn as_ptr(&self) -> *mut T {
         self.data.get()
     }
 
     pub unsafe fn unlock(&self) {
+        if self.name != "UART_TX" {
+            // crate::uart_println!("UNLOCK: {} ncli={}", self.name, mycpu().ncli);
+        }
         self.lock.store(false, Ordering::Release);
         pop_cli();
     }
@@ -69,6 +81,9 @@ impl<'a, T> DerefMut for SpinlockGuard<'a, T> {
 
 impl<'a, T> Drop for SpinlockGuard<'a, T> {
     fn drop(&mut self) {
+        if self.lock.name != "UART_TX" {
+            // crate::uart_println!("DROP: {} ncli={}", self.lock.name, mycpu().ncli);
+        }
         self.lock.lock.store(false, Ordering::Release);
         pop_cli();
     }

@@ -39,7 +39,7 @@ pub fn uartintr() {
 
 use crate::spinlock::Spinlock;
 
-pub static UART_TX: Spinlock<Uart> = Spinlock::new(Uart);
+pub static UART_TX: Spinlock<Uart> = Spinlock::new(Uart, "UART_TX");
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {

@@ -80,7 +80,7 @@ struct VirtioDriver {
 
 use crate::spinlock::Spinlock;
 
-pub static VIRTIO_LOCK: Spinlock<()> = Spinlock::new(());
+pub static VIRTIO_LOCK: Spinlock<()> = Spinlock::new((), "VIRTIO_LOCK");
 
 pub unsafe fn intr() {
     let io_base = unsafe { VIRTIO_IO_BASE };
@@ -292,6 +292,7 @@ impl VirtioDriver {
                 crate::proc::sleep(addr_of!(VIRTIO_BLK_DRIVER) as usize, Some(guard));
                 guard = VIRTIO_LOCK.lock();
             } else {
+                crate::uart_println!("DEBUG: virtio busy wait");
                 drop(guard);
                 core::arch::asm!("pause");
                 guard = VIRTIO_LOCK.lock();

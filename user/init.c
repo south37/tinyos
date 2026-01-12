@@ -49,11 +49,45 @@ void exec(char *path, char **argv) {
 // we presumably can't verify output unless we implement SYS_WRITE.
 // But calling an unknown syscall will print an error in kernel.
 
+#define SYS_FORK 57
+#define SYS_WAIT 61
+
+int64_t fork() { return syscall0(SYS_FORK); }
+
+int64_t wait(int64_t *status) { return syscall1(SYS_WAIT, (int64_t)status); }
+
 void start() {
   char *msg = "init: starting\n";
   syscall3(SYS_WRITE, 1, (long)msg, 15);
 
   for (;;) {
-    // Yield?
+    int64_t pid = fork();
+    if (pid < 0) {
+      char *err = "init: fork failed\n";
+      syscall3(SYS_WRITE, 1, (long)err, 18);
+      continue;
+    }
+    if (pid == 0) {
+      char *sh_path = "sh";
+      char *sh_argv[] = {"sh", 0};
+      exec(sh_path, sh_argv);
+      char *exec_err = "init: exec sh failed\n";
+      syscall3(SYS_WRITE, 1, (long)exec_err, 21);
+      // exit(1);
+      for (;;)
+        ;
+    } else {
+      for (;;) {
+        // Wait for shell to exit
+        int64_t wpid = wait(0);
+        if (wpid == pid) {
+          // Shell exited, restart it
+          break;
+        } else if (wpid < 0) {
+          // Wait failed?
+          // dummy loop
+        }
+      }
+    }
   }
 }

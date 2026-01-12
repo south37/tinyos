@@ -12,7 +12,7 @@ unsafe impl<T: Send> Sync for SleepLockSafe<T> {}
 impl<T> SleepLockSafe<T> {
     pub const fn new(data: T) -> Self {
         Self {
-            lock: Spinlock::new(false),
+            lock: Spinlock::new(false, "SLEEPLOCK"),
             data: UnsafeCell::new(data),
         }
     }

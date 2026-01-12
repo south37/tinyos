@@ -11,12 +11,15 @@ pub struct Console {
     pub e: usize, // Edit index
 }
 
-pub static CONSOLE: Spinlock<Console> = Spinlock::new(Console {
-    buf: [0; INPUT_BUF_SIZE],
-    r: 0,
-    w: 0,
-    e: 0,
-});
+pub static CONSOLE: Spinlock<Console> = Spinlock::new(
+    Console {
+        buf: [0; INPUT_BUF_SIZE],
+        r: 0,
+        w: 0,
+        e: 0,
+    },
+    "CONSOLE",
+);
 
 // Write to console (wraps uart_putc)
 pub fn consolewrite(src: u64, n: usize) -> usize {

@@ -225,6 +225,45 @@ impl PageTableEntry {
     }
 }
 
+pub fn uvm_copy(
+    old_pgdir: *mut PageTable,
+    new_pgdir: *mut PageTable,
+    sz: u64,
+    allocator: &mut Allocator,
+) -> bool {
+    let mut i = 0;
+    while i < sz {
+        let pte = walk(old_pgdir, allocator, i, false, 0);
+        if let Some(pte) = pte {
+            if pte.is_present() {
+                let pa = pte.addr();
+                let flags = pte.flags();
+
+                let mem = allocator.kalloc();
+                if mem.is_null() {
+                    return false;
+                }
+                unsafe {
+                    core::ptr::copy_nonoverlapping(p2v(pa as usize) as *const u8, mem, PG_SIZE);
+                }
+
+                if !map_pages(
+                    new_pgdir,
+                    allocator,
+                    i,
+                    v2p(mem as usize) as u64,
+                    PG_SIZE as u64,
+                    flags,
+                ) {
+                    return false;
+                }
+            }
+        }
+        i += PG_SIZE as u64;
+    }
+    true
+}
+
 fn pgrounddown(x: u64) -> u64 {
     x & !(PG_SIZE as u64 - 1)
 }

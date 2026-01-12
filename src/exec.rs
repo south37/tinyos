@@ -5,7 +5,7 @@ use crate::uart_println;
 use crate::util::{PG_SIZE, p2v};
 use crate::vm::{self, PageTableEntry};
 
-pub fn exec(path: &str, _argv: &[&str]) -> isize {
+pub fn exec(path: &str, argv: &[&str]) -> isize {
     // 1. Open file
     let ip = match fs::namei(path) {
         Some(ip) => {
@@ -196,6 +196,54 @@ pub fn exec(path: &str, _argv: &[&str]) -> isize {
     }
     uart_println!("DEBUG: exec: stack allocated");
 
+    // 5. Push arguments to stack
+    let mut sp = sz;
+    let mut ustack = [0u64; 16]; // Max 16 args + null
+
+    // Push strings
+    for (i, arg) in argv.iter().enumerate() {
+        sp -= (arg.len() + 1) as u64;
+        sp -= sp % 16;
+
+        let mut allocator = crate::allocator::ALLOCATOR.lock();
+        if !copyout(pgdir, &mut allocator, sp, arg.as_ptr(), arg.len()) {
+            return -1;
+        }
+        // Write null terminator
+        let zero = 0u8;
+        if !copyout(
+            pgdir,
+            &mut allocator,
+            sp + arg.len() as u64,
+            &zero as *const u8,
+            1,
+        ) {
+            return -1;
+        }
+        ustack[i] = sp;
+    }
+    ustack[argv.len()] = 0; // Null terminator for argv array
+
+    // Align stack
+    sp = sp & !15;
+
+    // Push argv array
+    sp -= ((argv.len() + 1) * 8) as u64; // argc pointers + null ptr
+    let argv_base = sp;
+
+    {
+        let mut allocator = crate::allocator::ALLOCATOR.lock();
+        if !copyout(
+            pgdir,
+            &mut allocator,
+            sp,
+            ustack.as_ptr() as *const u8,
+            (argv.len() + 1) * 8,
+        ) {
+            return -1;
+        }
+    }
+
     // 6. Commit Process Changes
     unsafe {
         #[allow(static_mut_refs)]
@@ -211,7 +259,16 @@ pub fn exec(path: &str, _argv: &[&str]) -> isize {
         let tf = &mut *(((p.kstack as usize) + crate::proc::KSTACK_SIZE
             - core::mem::size_of::<TrapFrame>()) as *mut TrapFrame);
         tf.rip = elf.entry; // Entry point
-        tf.rsp = sz; // Stack Pointer at top
+        tf.rsp = sp; // Stack Pointer at argv array
+
+        // System V ABI: rdi=argc, rsi=argv
+        tf.rdi = argv.len() as u64;
+        tf.rsi = argv_base;
+
+        // Fake return address
+        sp -= 8;
+        // tf.rsp = sp; // We don't actually update rsp again, we just leave it pointing at arguments if using stack args.
+        // But for registers, we set tf.rsp to what it was.
 
         // Switch to new page table
         vm::switch(pgdir);
@@ -222,4 +279,45 @@ pub fn exec(path: &str, _argv: &[&str]) -> isize {
     uart_println!("DEBUG: exec: process committed");
 
     0
+}
+
+use crate::allocator::Allocator;
+use crate::vm::PageTable;
+
+fn copyout(
+    pgdir: *mut PageTable,
+    allocator: &mut Allocator,
+    va: u64,
+    buf: *const u8,
+    len: usize,
+) -> bool {
+    let mut buf = buf;
+    let mut len = len;
+    let mut va = va;
+
+    while len > 0 {
+        let va0 = (va as usize) & !(PG_SIZE - 1);
+        let dst_ptr = match vm::walk(pgdir, allocator, va0 as u64, false, 0) {
+            Some(pte) => {
+                if !pte.is_present() {
+                    return false;
+                }
+                p2v(pte.addr() as usize) as *mut u8
+            }
+            None => return false,
+        };
+
+        let n = core::cmp::min(PG_SIZE - (va as usize - va0), len);
+        unsafe {
+            let dst = dst_ptr.add(va as usize - va0);
+            core::ptr::copy_nonoverlapping(buf, dst, n);
+        }
+
+        len -= n;
+        unsafe {
+            buf = buf.add(n);
+        }
+        va += n as u64;
+    }
+    true
 }

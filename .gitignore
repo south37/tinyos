@@ -5,8 +5,14 @@
 *.img
 /asm/initcode
 /asm/initcode.out
+/asm/entryother
+/asm/entryother.out
 /user/init
+/user/echo
+/user/sh
 
 # Dev
 *.swp
 qemu.log
+build.log
+debug.log

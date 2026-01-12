@@ -111,33 +111,36 @@ pub struct DirEntry {
     pub file_type: u8,
 }
 
-static SB: Spinlock<SuperBlock> = Spinlock::new(SuperBlock {
-    s_inodes_count: 0,
-    s_blocks_count: 0,
-    s_r_blocks_count: 0,
-    s_free_blocks_count: 0,
-    s_free_inodes_count: 0,
-    s_first_data_block: 0,
-    s_log_block_size: 0,
-    s_log_frag_size: 0,
-    s_blocks_per_group: 0,
-    s_frags_per_group: 0,
-    s_inodes_per_group: 0,
-    s_mtime: 0,
-    s_wtime: 0,
-    s_mnt_count: 0,
-    s_max_mnt_count: 0,
-    s_magic: 0,
-    s_state: 0,
-    s_errors: 0,
-    s_minor_rev_level: 0,
-    s_lastcheck: 0,
-    s_checkinterval: 0,
-    s_creator_os: 0,
-    s_rev_level: 0,
-    s_def_resuid: 0,
-    s_def_resgid: 0,
-});
+static SB: Spinlock<SuperBlock> = Spinlock::new(
+    SuperBlock {
+        s_inodes_count: 0,
+        s_blocks_count: 0,
+        s_r_blocks_count: 0,
+        s_free_blocks_count: 0,
+        s_free_inodes_count: 0,
+        s_first_data_block: 0,
+        s_log_block_size: 0,
+        s_log_frag_size: 0,
+        s_blocks_per_group: 0,
+        s_frags_per_group: 0,
+        s_inodes_per_group: 0,
+        s_mtime: 0,
+        s_wtime: 0,
+        s_mnt_count: 0,
+        s_max_mnt_count: 0,
+        s_magic: 0,
+        s_state: 0,
+        s_errors: 0,
+        s_minor_rev_level: 0,
+        s_lastcheck: 0,
+        s_checkinterval: 0,
+        s_creator_os: 0,
+        s_rev_level: 0,
+        s_def_resuid: 0,
+        s_def_resgid: 0,
+    },
+    "SB",
+);
 
 static GDT: Spinlock<[GroupDesc; 32]> = Spinlock::new(
     [GroupDesc {
@@ -150,6 +153,7 @@ static GDT: Spinlock<[GroupDesc; 32]> = Spinlock::new(
         bg_pad: 0,
         bg_reserved: [0; 3],
     }; 32],
+    "GDT",
 );
 
 pub fn fsinit(dev: u32) {
@@ -202,20 +206,23 @@ struct ICache {
     inodes: [Inode; NINODE],
 }
 
-static ICACHE: Spinlock<ICache> = Spinlock::new(ICache {
-    inodes: [
-        Inode::new(),
-        Inode::new(),
-        Inode::new(),
-        Inode::new(),
-        Inode::new(),
-        Inode::new(),
-        Inode::new(),
-        Inode::new(),
-        Inode::new(),
-        Inode::new(),
-    ],
-});
+static ICACHE: Spinlock<ICache> = Spinlock::new(
+    ICache {
+        inodes: [
+            Inode::new(),
+            Inode::new(),
+            Inode::new(),
+            Inode::new(),
+            Inode::new(),
+            Inode::new(),
+            Inode::new(),
+            Inode::new(),
+            Inode::new(),
+            Inode::new(),
+        ],
+    },
+    "ICACHE",
+);
 
 pub fn iget(dev: u32, inum: u32) -> &'static Inode {
     let mut guard = ICACHE.lock();
@@ -247,21 +254,23 @@ impl Inode {
         let mut guard = self.lock.lock();
 
         if guard.i_mode == 0 {
-            let sb = SB.lock();
-            let inodes_per_group = sb.s_inodes_per_group;
-            let group = (self.inum - 1) / inodes_per_group;
-            let index = (self.inum - 1) % inodes_per_group;
+            let (block, byte_offset) = {
+                let sb = SB.lock();
+                let inodes_per_group = sb.s_inodes_per_group;
+                let group = (self.inum - 1) / inodes_per_group;
+                let index = (self.inum - 1) % inodes_per_group;
 
-            let gdt = GDT.lock();
-            let inode_table_block = gdt[group as usize].bg_inode_table;
+                let gdt = GDT.lock();
+                let inode_table_block = gdt[group as usize].bg_inode_table;
 
-            let inode_size = 128;
+                let inode_size = 128;
 
-            let offset_in_table = index * inode_size;
-            let block_offset = offset_in_table / BSIZE as u32;
-            let byte_offset = offset_in_table % BSIZE as u32;
+                let offset_in_table = index * inode_size;
+                let block_offset = offset_in_table / BSIZE as u32;
+                let byte_offset = offset_in_table % BSIZE as u32;
 
-            let block = inode_table_block + block_offset;
+                (inode_table_block + block_offset, byte_offset)
+            };
 
             let b = crate::bio::bread(self.dev, block);
             {
@@ -419,7 +428,6 @@ pub fn dirlookup(dir: &Inode, name: &str) -> Option<u32> {
     let mut buf = [0u8; BSIZE];
 
     drop(guard); // Unlock to use readi
-
     loop {
         let n = readi(dir, buf.as_mut_ptr(), off, BSIZE as u32);
         if n == 0 {
@@ -435,8 +443,6 @@ pub fn dirlookup(dir: &Inode, name: &str) -> Option<u32> {
                 let name_len = de.name_len as usize;
                 let name_ptr = unsafe { ptr.add(core::mem::size_of::<DirEntry>()) };
                 let name_slice = unsafe { core::slice::from_raw_parts(name_ptr, name_len) };
-                let s = core::str::from_utf8(name_slice).unwrap_or("?");
-                crate::uart_println!("DEBUG: dir scan: name='{}', inode={}", s, de.inode);
 
                 if name.len() == name_len && name.as_bytes() == name_slice {
                     return Some(de.inode);

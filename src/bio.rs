@@ -37,10 +37,13 @@ pub struct Bcache {
     pub head: usize, // Index of head of LRU list
 }
 
-pub static BCACHE: Spinlock<Bcache> = Spinlock::new(Bcache {
-    bufs: [Buf::new(); NBUF],
-    head: 0,
-});
+pub static BCACHE: Spinlock<Bcache> = Spinlock::new(
+    Bcache {
+        bufs: [Buf::new(); NBUF],
+        head: 0,
+    },
+    "BCACHE",
+);
 
 pub fn binit() {
     let mut bcache = BCACHE.lock();
@@ -66,6 +69,7 @@ pub fn binit() {
 
 // Read a block into buffer
 pub fn bread(dev: u32, blockno: u32) -> usize {
+    // crate::uart_println!("DEBUG: bread dev={} blockno={}", dev, blockno);
     let b = bget(dev, blockno);
     let mut do_read = false;
     {
@@ -108,6 +112,7 @@ pub fn brelse(b: usize) {
 }
 
 pub fn bget(dev: u32, blockno: u32) -> usize {
+    // crate::uart_println!("DEBUG: bget enter dev={} blockno={}", dev, blockno);
     let mut cache = BCACHE.lock();
 
     // 1. Look for block

@@ -43,7 +43,10 @@ use crate::uart_println;
 
 pub const SYS_READ: u64 = 0;
 pub const SYS_WRITE: u64 = 1;
-pub const SYS_EXEC: u64 = 59; // Linux execve is 59
+pub const SYS_FORK: u64 = 57;
+pub const SYS_EXEC: u64 = 59;
+pub const SYS_EXIT: u64 = 60;
+pub const SYS_WAIT: u64 = 61;
 
 pub fn syscall() {
     #[allow(static_mut_refs)]
@@ -54,12 +57,13 @@ pub fn syscall() {
     };
 
     let num = tf.rax;
-    uart_println!("DEBUG: Syscall: {}", num);
-
     let ret = match num {
         SYS_READ => sys_read(tf),
         SYS_WRITE => sys_write(tf),
         SYS_EXEC => sys_exec(tf),
+        SYS_FORK => sys_fork(tf),
+        SYS_EXIT => sys_exit(tf),
+        SYS_WAIT => sys_wait(tf),
         _ => {
             uart_println!("Unknown syscall {}", num);
             -1
@@ -106,7 +110,10 @@ fn argfd(n: usize, tf: &TrapFrame) -> Result<&'static mut crate::file::File, ()>
 fn argstr(n: usize, tf: &TrapFrame) -> Result<&str, ()> {
     // Fetch nth argument as string pointer
     let ptr_val = argptr(n, tf);
+    fetch_str(ptr_val)
+}
 
+fn fetch_str(ptr_val: u64) -> Result<&'static str, ()> {
     // Verify pointer (very basic verification)
     if ptr_val == 0 {
         return Err(());
@@ -132,13 +139,49 @@ fn argstr(n: usize, tf: &TrapFrame) -> Result<&str, ()> {
 fn sys_exec(tf: &TrapFrame) -> isize {
     let path = match argstr(0, tf) {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => {
+            return -1;
+        }
     };
-    uart_println!("DEBUG: sys_exec path='{}'", path);
-    // Argv ignored for now
-    let ret = crate::exec::exec(path, &[]);
-    uart_println!("DEBUG: sys_exec ret={}", ret);
-    ret
+
+    let argv_ptr = argptr(1, tf);
+    let mut argv: [&str; 16] = [""; 16];
+    let mut argc = 0;
+
+    if argv_ptr != 0 {
+        loop {
+            if argc >= 16 {
+                return -1;
+            }
+            let uarg = unsafe { *((argv_ptr + (argc as u64) * 8) as *const u64) };
+            if uarg == 0 {
+                break;
+            }
+            match fetch_str(uarg) {
+                Ok(s) => argv[argc] = s,
+                Err(_) => return -1,
+            }
+            argc += 1;
+        }
+    }
+    crate::exec::exec(path, &argv[0..argc])
+}
+
+fn sys_fork(_tf: &TrapFrame) -> isize {
+    crate::proc::fork()
+}
+
+fn sys_exit(tf: &TrapFrame) -> isize {
+    let status = argint(0, tf) as isize;
+    crate::proc::exit(status);
+    0
+}
+
+fn sys_wait(tf: &TrapFrame) -> isize {
+    let _pid = argint(0, tf) as isize; // We don't support waiting for specific PID yet in bare wait?
+    // Actually standard wait(status) waits for ANY child. waitpid(pid, status, options) waits for specific.
+    // Let's implement wait() as wait for any child.
+    crate::proc::wait(-1)
 }
 
 fn sys_read(tf: &TrapFrame) -> isize {

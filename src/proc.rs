@@ -47,6 +47,8 @@ pub struct Process {
     pub chan: usize,
     pub name: [u8; 16],
     pub ofile: [Option<*mut File>; NFILE],
+    pub parent: Option<*mut Process>,
+    pub killed: bool,
 }
 
 impl Process {
@@ -60,6 +62,8 @@ impl Process {
             chan: 0,
             name: [0; 16],
             ofile: [None; NFILE],
+            parent: None,
+            killed: false,
         }
     }
 }
@@ -91,7 +95,8 @@ impl Cpu {
 
 pub static mut CPUS: [Cpu; NCPU] = [Cpu::new(); NCPU];
 pub static mut PROCS: [Process; NPROC] = [Process::new(); NPROC];
-pub static PROCS_LOCK: crate::spinlock::Spinlock<()> = crate::spinlock::Spinlock::new(());
+pub static PROCS_LOCK: crate::spinlock::Spinlock<()> =
+    crate::spinlock::Spinlock::new((), "PROCS_LOCK");
 static mut PID_COUNTER: usize = 0;
 pub static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
@@ -170,6 +175,11 @@ pub unsafe fn sched(guard: SpinlockGuard<()>) {
         let p = &mut **p;
 
         if cpu.ncli != 1 {
+            crate::uart_println!("PANIC: sched ncli={}", cpu.ncli);
+            crate::uart_println!("PROCS_LOCK held: {}", PROCS_LOCK.holding());
+            // crate::uart_println!("VIRTIO_LOCK held: {}", crate::virtio::VIRTIO_LOCK.holding());
+            // crate::uart_println!("BCACHE held: {}", crate::bio::BCACHE.holding());
+            // crate::uart_println!("ALLOCATOR held: {}", crate::allocator::ALLOCATOR.holding());
             panic!("sched: ncli {}", cpu.ncli);
         }
         if p.state == ProcessState::RUNNING {
@@ -201,7 +211,6 @@ pub fn yield_proc() {
 #[unsafe(no_mangle)]
 extern "C" fn release_procs_lock() {
     unsafe {
-        crate::uart_println!("DEBUG: forkret release_lock called");
         PROCS_LOCK.unlock();
     }
 }
@@ -349,7 +358,10 @@ pub fn scheduler() {
         unsafe { core::arch::asm!("sti") };
 
         // Acquire PTABLE LOCK
+        // Acquire PTABLE LOCK
+        // crate::uart_println!("DEBUG: sched acquiring lock");
         let mut guard = PROCS_LOCK.lock();
+        // crate::uart_println!("DEBUG: sched lock acquired");
 
         let mut ran_process = false;
         unsafe {
@@ -383,11 +395,213 @@ pub fn scheduler() {
         drop(guard);
 
         if !ran_process {
-            unsafe { core::arch::asm!("hlt") };
+            // unsafe { core::arch::asm!("hlt") };
+            // unsafe { core::arch::asm!("sti") }; // Ensure interrupts enabled
+            // crate::uart_println!("DEBUG: idle");
+            core::hint::spin_loop();
+        }
+    }
+}
+
+pub fn fork() -> isize {
+    let mut i: isize = -1;
+    let mut pid: isize = -1;
+
+    let cpu = mycpu();
+    let curproc = unsafe { &mut *cpu.process.unwrap() };
+
+    // Allocate process
+    let mut np_opt = None;
+    let mut guard = PROCS_LOCK.lock();
+    unsafe {
+        for (idx, p) in PROCS.iter_mut().enumerate() {
+            if p.state == ProcessState::UNUSED {
+                np_opt = Some(p);
+                i = idx as isize;
+                break;
+            }
+        }
+    }
+
+    if let Some(np) = np_opt {
+        unsafe {
+            // Allocate kernel stack
+            np.kstack = crate::allocator::ALLOCATOR.lock().kalloc();
+            if np.kstack.is_null() {
+                drop(guard);
+                return -1;
+            }
+
+            // Copy user memory
+            np.pgdir = vm::uvm_create(&mut crate::allocator::ALLOCATOR.lock())
+                .expect("fork: uvm_create failed");
+            // Assuming simplified uvm_copy for now: size is implicitly managed or we just copy known range?
+            // Since we don't track proc size strictly yet, let's assume valid range up to KERNBASE
+            // But standard approach is maintaining 'sz' in proc.
+            // For this simple text, let's just copy 0..0x40000000 (1GB) if mapped? Too slow.
+            // Let's rely on `sz` in process if we added it, or copy what we can.
+            // Wait, we didn't add `sz` to Process struct. Let's add it or hack it.
+            // Hack: Walk page table and copy present pages. uvm_copy(old, new, 0x80000000).
+            if !vm::uvm_copy(
+                curproc.pgdir,
+                np.pgdir,
+                0x80000000,
+                &mut crate::allocator::ALLOCATOR.lock(),
+            ) {
+                // TODO: Free kstack
+                drop(guard);
+                return -1;
+            }
+
+            PID_COUNTER += 1;
+            np.pid = PID_COUNTER;
+            pid = np.pid as isize;
+            np.state = ProcessState::EMBRYO;
+
+            // Copy trap frame
+            let sp = np.kstack as usize + KSTACK_SIZE;
+            let tf_addr = sp - core::mem::size_of::<TrapFrame>();
+            let tf = tf_addr as *mut TrapFrame;
+            let cur_tf = ((curproc.kstack as usize) + KSTACK_SIZE
+                - core::mem::size_of::<TrapFrame>()) as *const TrapFrame;
+            core::ptr::copy_nonoverlapping(cur_tf, tf, 1);
+
+            // Set return value for child
+            (*tf).rax = 0;
+
+            // Setup context
+            let context_addr = tf_addr - core::mem::size_of::<Context>();
+            np.context = context_addr as *mut Context;
+            (*np.context).rip = forkret as *const () as usize as u64;
+            // Copy registers? No, context is for scheduler.
+            (*np.context).r15 = 0;
+            (*np.context).r14 = 0;
+            (*np.context).r13 = 0;
+            (*np.context).r12 = 0;
+            (*np.context).rbx = 0;
+            (*np.context).rbp = 0;
+
+            // Copy open files
+            for fd in 0..NFILE {
+                if let Some(f) = curproc.ofile[fd] {
+                    // TODO: filedup(f); increment ref count
+                    np.ofile[fd] = Some(f);
+                }
+            }
+            // Copy cwd
+            // np.cwd = idup(curproc.cwd);
+
+            // Safely copying name
+            np.name = curproc.name;
+
+            np.parent = Some(curproc as *mut Process);
+
+            np.state = ProcessState::RUNNABLE;
+        }
+    } else {
+        drop(guard);
+        return -1;
+    }
+
+    drop(guard);
+    pid
+}
+
+pub fn exit(status: isize) {
+    let cpu = mycpu();
+    let curproc = unsafe { &mut *cpu.process.unwrap() };
+
+    uart_println!("Exit: pid={} status={}", curproc.pid, status);
+
+    // Close all open files
+    // for fd in 0..NFILE { ... }
+
+    let mut guard = PROCS_LOCK.lock();
+
+    // Wake up parent
+    unsafe {
+        wakeup1(curproc.parent);
+    }
+
+    curproc.state = ProcessState::ZOMBIE;
+
+    unsafe {
+        sched(guard);
+    }
+    panic!("zombie exit");
+}
+
+pub fn wait(pid: isize) -> isize {
+    let cpu = mycpu();
+    let curproc = unsafe { &mut *cpu.process.unwrap() };
+
+    let mut guard = PROCS_LOCK.lock();
+    loop {
+        let mut have_kids = false;
+        let mut child_pid: isize = -1;
+
+        unsafe {
+            for p in PROCS.iter_mut() {
+                if p.parent == Some(curproc as *mut Process) {
+                    have_kids = true;
+                    if p.state == ProcessState::ZOMBIE {
+                        // Found one
+                        child_pid = p.pid as isize;
+
+                        // Clean up
+                        // kfree(p.kstack)
+                        // freevm(p.pgdir)
+                        p.kstack = core::ptr::null_mut();
+                        p.pgdir = core::ptr::null_mut();
+                        p.state = ProcessState::UNUSED;
+                        p.pid = 0;
+                        p.parent = None;
+                        p.name = [0; 16];
+                        p.killed = false;
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        if child_pid != -1 {
+            drop(guard);
+            return child_pid;
+        }
+
+        if !have_kids || curproc.killed {
+            drop(guard);
+            return -1;
+        }
+
+        // Wait for children to exit (sleep on self)
+        unsafe {
+            // Manual sleep to avoid deadlock (sleep tries to acquire PROCS_LOCK)
+            // We already hold PROCS_LOCK (guard), so just setup state and sched.
+            curproc.chan = curproc as *mut Process as usize;
+            curproc.state = ProcessState::SLEEPING;
+            sched(guard);
+            curproc.chan = 0;
+            // sleep(curproc as *mut Process as usize, Some(guard));
+        }
+        guard = PROCS_LOCK.lock();
+    }
+}
+
+unsafe fn wakeup1(chan: Option<*mut Process>) {
+    // Only wake up processes sleeping on chan (in this case, parent pointer for wait)
+    // Actually wait uses parent pointer as channel? Or simpler convention.
+    // xv6 uses parent ptr.
+    if let Some(c) = chan {
+        for p in PROCS.iter_mut() {
+            if p.state == ProcessState::SLEEPING && p.chan == c as usize {
+                p.state = ProcessState::RUNNABLE;
+            }
         }
     }
 }
 
 pub unsafe fn killed(p: &Process) -> bool {
-    p.state == ProcessState::ZOMBIE // Placeholder
+    p.killed
 }

@@ -42,9 +42,12 @@ pub struct FileTable {
     pub files: [File; NFILE],
 }
 
-pub static FTABLE: Spinlock<FileTable> = Spinlock::new(FileTable {
-    files: [File::new(); NFILE],
-});
+pub static FTABLE: Spinlock<FileTable> = Spinlock::new(
+    FileTable {
+        files: [File::new(); NFILE],
+    },
+    "FTABLE",
+);
 
 pub fn filealloc() -> Option<&'static mut File> {
     let mut ft = FTABLE.lock();
