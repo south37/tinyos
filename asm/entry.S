@@ -91,7 +91,7 @@ ptbl_loop:
     ljmp   $8, $(entry64low - KERNBASE)
 
 # GDT for 64-bit code. Only code seg (no data seg).
-.p2align 4               # force 16 byte alignment
+.p2align 2
 gdt64:
     .word 0, 0, 0, 0 # Null
 
@@ -104,7 +104,7 @@ gdt64desc:
     .quad  gdt64 - KERNBASE
 
 # Enter 64-bit code
-.p2align 4
+.p2align 2
 .code64
 entry64low:
     movq   $entry64high, %rax
