@@ -54,10 +54,14 @@ unsafe fn inb(port: u16) -> u8 {
     ret
 }
 
+use crate::spinlock::Spinlock;
+
+pub static UART_TX: Spinlock<Uart> = Spinlock::new(Uart);
+
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    Uart.write_fmt(args).unwrap();
+    UART_TX.lock().write_fmt(args).unwrap();
 }
 
 #[macro_export]
