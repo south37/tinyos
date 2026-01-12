@@ -10,11 +10,11 @@ pub fn exec(path: &str, _argv: &[&str]) -> isize {
     // 1. Open file
     let ip = match fs::namei(path) {
         Some(ip) => {
-            uart_println!("exec: found {}", path);
+            uart_println!("DEBUG: exec: found {}", path);
             ip
         }
         None => {
-            uart_println!("exec: failed to find {}", path);
+            uart_println!("DEBUG: exec: failed to find {}", path);
             return -1;
         }
     };
@@ -50,7 +50,7 @@ pub fn exec(path: &str, _argv: &[&str]) -> isize {
     }
 
     // 3. Create new page table
-    uart_println!("exec: loaded elf, entry=0x{:x}", elf.entry);
+    uart_println!("DEBUG: exec: loaded elf, entry=0x{:x}", elf.entry);
     let mut allocator = crate::allocator::ALLOCATOR.lock();
     let pgdir = match vm::uvm_create(&mut allocator) {
         Some(p) => p,
