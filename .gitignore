@@ -3,7 +3,7 @@
 /build
 *.o
 *.img
-/asm/build
+/kernel/asm/build
 /user/build
 /user/target
 

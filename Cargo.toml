@@ -1,6 +1,9 @@
-[package]
-name = "tinyos"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
+[workspace]
+members = [
+    "kernel",
+    "user/ulib",
+    "user/init",
+    "user/sh",
+    "user/echo"
+]
+resolver = "2"

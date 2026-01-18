@@ -1,0 +1,12 @@
+[build]
+target = "x86_64-unknown-none"
+
+[target.x86_64-unknown-none]
+linker = "ld"
+rustflags = [
+  "-C", "link-arg=-Tkernel/src/linker.ld",
+  "-C", "link-arg=kernel/asm/build/entry.o",
+  "-C", "link-arg=kernel/asm/build/vectors.o",
+  "-C", "link-arg=kernel/asm/build/syscall.o",
+  "-C", "relocation-model=static",
+]

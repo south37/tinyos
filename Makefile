@@ -11,7 +11,7 @@ export LOG_LEVEL := $(LOG)
 
 # Paths
 TARGET_DIR := target/x86_64-unknown-none/$(PROFILE)
-KERNEL_BIN := $(TARGET_DIR)/tinyos
+KERNEL_BIN := $(TARGET_DIR)/kernel
 DISK_IMG := disk.img
 
 # Flags
@@ -38,11 +38,11 @@ build: kernel fs
 
 # 1. Assembly Objects (Required for linking kernel)
 asm:
-	$(MAKE) -C asm
+	$(MAKE) -C kernel/asm
 
 # 2. Kernel Build
 kernel: asm
-	$(CARGO) build $(CARGO_FLAGS)
+	cd kernel && $(CARGO) build $(CARGO_FLAGS)
 
 # 3. User Programs (Required for fs)
 user:
@@ -74,7 +74,7 @@ gdb:
 
 # Clean
 clean:
-	$(MAKE) -C asm clean
+	$(MAKE) -C kernel/asm clean
 	$(MAKE) -C user clean
 	$(CARGO) clean
 	rm -rf build $(DISK_IMG) qemu.log
