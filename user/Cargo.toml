@@ -1,9 +1,0 @@
-[workspace]
-members = [
-    "ulib",
-    "init",
-    "sh",
-    "echo",
-]
-resolver = "2"
-

@@ -1,8 +1,8 @@
-use crate::elf::{ELF_MAGIC, ElfHeader, PT_LOAD, ProgramHeader};
+use crate::elf::{ElfHeader, ProgramHeader, ELF_MAGIC, PT_LOAD};
 use crate::fs::{self};
 use crate::trap::TrapFrame;
 
-use crate::util::{PG_SIZE, p2v};
+use crate::util::{p2v, PG_SIZE};
 use crate::vm::{self, PageTableEntry};
 
 pub fn exec(path: &str, argv: &[&str]) -> isize {
@@ -105,6 +105,17 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
 
             let mut a = addr & !(PG_SIZE as u64 - 1);
             while a < end {
+                let is_mapped = if let Some(pte) = vm::walk(pgdir, &mut allocator, a, false, 0) {
+                    pte.is_present()
+                } else {
+                    false
+                };
+
+                if is_mapped {
+                    a += PG_SIZE as u64;
+                    continue;
+                }
+
                 let mem = allocator.kalloc();
                 if mem.is_null() {
                     return -1;
