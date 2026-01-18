@@ -264,7 +264,7 @@ pub fn uvm_copy(
     true
 }
 
-fn pgrounddown(x: u64) -> u64 {
+pub fn pgrounddown(x: u64) -> u64 {
     x & !(PG_SIZE as u64 - 1)
 }
 

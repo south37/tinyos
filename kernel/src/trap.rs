@@ -1,6 +1,6 @@
 use crate::gdt::KCODE_SELECTOR;
 
-use crate::util::{IRQ_TIMER, IRQ_UART, IRQ_VIRTIO, T_IRQ0, T_SYSCALL};
+use crate::util::{IRQ_TIMER, IRQ_UART, IRQ_VIRTIO, T_IRQ0, T_PAGE_FAULT, T_SYSCALL};
 
 pub fn init() {
     unsafe {
@@ -107,6 +107,10 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
         n if n == T_SYSCALL as u64 => {
             crate::syscall::syscall();
         }
+        n if n == T_PAGE_FAULT as u64 => {
+            let addr = unsafe { crate::util::rcr2() };
+            handle_page_fault(addr, tf);
+        }
         _ => {
             crate::error!("Trap {} on CPU {}", tf.trap_num, crate::lapic::id());
             crate::error!("Error Code: {:x}", tf.error_code);
@@ -116,5 +120,50 @@ extern "C" fn trap_handler(tf: &mut TrapFrame) {
             // Infinite loop on unhandled trap
             loop {}
         }
+    }
+}
+
+fn handle_page_fault(addr: u64, tf: &TrapFrame) {
+    let cpu = crate::proc::mycpu();
+    let p = unsafe { &mut *cpu.process.unwrap() };
+
+    // Check if address is valid.
+    // Must be < p.sz.
+    if addr >= p.sz as u64 {
+        crate::info!(
+            "Segmentation Fault: pid={} name={:?} ip={:x} addr={:x}",
+            p.pid,
+            p.name,
+            tf.rip,
+            addr
+        );
+        crate::proc::exit(-1);
+    }
+
+    // Allocate page
+    // We need PG_SIZE aligned address
+    let page_addr = crate::vm::pgrounddown(addr);
+
+    let mut allocator = crate::allocator::ALLOCATOR.lock();
+    let mem = allocator.kalloc();
+    if mem.is_null() {
+        crate::info!("OOM: pid={} name={:?}", p.pid, p.name);
+        crate::proc::exit(-1);
+    }
+    unsafe {
+        core::ptr::write_bytes(mem, 0, crate::util::PG_SIZE);
+    }
+
+    if !crate::vm::map_pages(
+        p.pgdir,
+        &mut allocator,
+        page_addr,
+        crate::util::v2p(mem as usize) as u64,
+        crate::util::PG_SIZE as u64,
+        crate::vm::PageTableEntry::WRITABLE | crate::vm::PageTableEntry::USER,
+    ) {
+        allocator.kfree(mem as usize);
+        crate::uart_println!("Map failed: pid={} name={:?}", p.pid, p.name);
+        crate::proc::exit(-1);
     }
 }
