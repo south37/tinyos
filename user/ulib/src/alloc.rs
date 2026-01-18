@@ -1,9 +1,11 @@
 use crate::syscall;
+use core::alloc::{GlobalAlloc, Layout};
 
 #[repr(C)]
+// 16 bytes header
 struct Header {
-    ptr: *mut Header,
-    size: usize,
+    ptr: *mut Header, // Next block in list
+    size: usize,      // Number of units (= size of Header) in this block
 }
 
 static mut BASE: Header = Header {
@@ -12,9 +14,25 @@ static mut BASE: Header = Header {
 };
 static mut FREEP: *mut Header = core::ptr::null_mut();
 
+pub struct TinyAllocator;
+
+#[global_allocator]
+pub static ALLOCATOR: TinyAllocator = TinyAllocator;
+
+unsafe impl GlobalAlloc for TinyAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        malloc(layout.size())
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        free(ptr);
+    }
+}
+
 pub unsafe fn malloc(nbytes: usize) -> *mut u8 {
     let mut p: *mut Header;
     let mut prevp: *mut Header;
+    // Require additional 1 unit for Header
     let nunits = (nbytes + core::mem::size_of::<Header>() - 1) / core::mem::size_of::<Header>() + 1;
 
     if FREEP.is_null() {
@@ -29,6 +47,7 @@ pub unsafe fn malloc(nbytes: usize) -> *mut u8 {
     loop {
         if (*p).size >= nunits {
             if (*p).size == nunits {
+                // Remove this block (= p) from list.
                 (*prevp).ptr = (*p).ptr;
             } else {
                 (*p).size -= nunits;
@@ -45,11 +64,6 @@ pub unsafe fn malloc(nbytes: usize) -> *mut u8 {
             if p_new.is_null() {
                 return core::ptr::null_mut();
             }
-            // morecore returns a block that is freed.
-            // The free will insert it into the list, and next loop iteration will find it.
-            // Wait, free puts it in list. p is reset?
-            // standard K&R malloc resets p to FREEP because free updates FREEP?
-            // Let's analyze morecore.
         }
 
         prevp = p;
@@ -58,10 +72,7 @@ pub unsafe fn malloc(nbytes: usize) -> *mut u8 {
 }
 
 unsafe fn morecore(nu: usize) -> *mut Header {
-    let mut n = nu;
-    if n < 4096 {
-        n = 4096;
-    }
+    let n = if nu < 4096 { 4096 } else { nu };
     let p = syscall::sbrk((n * core::mem::size_of::<Header>()) as isize);
     if p == -1 {
         return core::ptr::null_mut();
@@ -102,4 +113,9 @@ pub unsafe fn free(ap: *mut u8) {
     }
 
     FREEP = p;
+}
+
+#[alloc_error_handler]
+fn alloc_error(layout: Layout) -> ! {
+    panic!("allocation error: {:?}", layout)
 }

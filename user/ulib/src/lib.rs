@@ -1,5 +1,7 @@
 #![no_std]
+#![feature(alloc_error_handler)]
 
+extern crate alloc as rust_alloc;
 use core::panic::PanicInfo;
 
 pub mod alloc;

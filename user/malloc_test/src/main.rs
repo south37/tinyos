@@ -1,71 +1,51 @@
 #![no_std]
 #![no_main]
 
-use ulib::{alloc, entry, println};
+extern crate alloc;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use ulib::{entry, println};
 
 entry!(main);
 
 fn main(_argc: usize, _argv: *const *const u8) {
     println!("malloc_test: starting");
 
-    // Test 1: Small allocation
-    let size = 100;
-    let ptr = unsafe { alloc::malloc(size) };
-    if ptr.is_null() {
-        println!("malloc_test: malloc failed");
-        return;
+    // Test 1: Vec
+    let mut v = Vec::new();
+    for i in 0..100 {
+        v.push(i);
     }
-    println!("malloc_test: allocated {} bytes at {:p}", size, ptr);
+    println!(
+        "malloc_test: vec pushed 100 items. len={} cap={}",
+        v.len(),
+        v.capacity()
+    );
 
-    // Verify write/read
-    unsafe {
-        for i in 0..size {
-            *ptr.add(i) = (i % 256) as u8;
-        }
-    }
-
-    // Check values
     let mut ok = true;
-    unsafe {
-        for i in 0..size {
-            if *ptr.add(i) != (i % 256) as u8 {
-                println!("malloc_test: verify failed at {}", i);
-                ok = false;
-                break;
-            }
+    for (i, x) in v.iter().enumerate() {
+        if *x != i {
+            println!("malloc_test: vec verify failed at {}", i);
+            ok = false;
+            break;
         }
     }
     if ok {
-        println!("malloc_test: write/read verification passed");
+        println!("malloc_test: vec verification passed");
     }
 
-    // Test 2: Free and Reuse
-    unsafe { alloc::free(ptr) };
-    println!("malloc_test: freed memory");
-
-    let ptr2 = unsafe { alloc::malloc(size) };
-    println!("malloc_test: allocated again at {:p}", ptr2);
-
-    // In a simple allocator, ptr2 might be same as ptr if it reused the block
-    if ptr == ptr2 {
-        println!("malloc_test: reused freed block (expected)");
+    // Test 2: Box
+    let b = Box::new(12345);
+    println!("malloc_test: box value = {}", *b);
+    if *b == 12345 {
+        println!("malloc_test: box verification passed");
     } else {
-        println!(
-            "malloc_test: did not reuse block (might be okay if fragmentation or different logic)"
-        );
+        println!("malloc_test: box verification failed");
     }
 
-    // Test 3: Large allocation (trigger sbrk)
-    let large_size = 8192;
-    let ptr3 = unsafe { alloc::malloc(large_size) };
-    if ptr3.is_null() {
-        println!("malloc_test: large malloc failed");
-    } else {
-        println!("malloc_test: allocated {} bytes at {:p}", large_size, ptr3);
-        unsafe { alloc::free(ptr3) };
-    }
-
-    unsafe { alloc::free(ptr2) };
+    // Test 3: Large separate allocations
+    let v2: Vec<u8> = alloc::vec![0u8; 8192];
+    println!("malloc_test: large vec allocated. len={}", v2.len());
 
     println!("malloc_test: finished");
 }
