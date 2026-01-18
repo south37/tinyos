@@ -4,15 +4,27 @@ use core::alloc::{GlobalAlloc, Layout};
 #[repr(C)]
 // 16 bytes header
 struct Header {
-    ptr: *mut Header, // Next block in list
-    size: usize,      // Number of units (= size of Header) in this block
+    next: *mut Header, // Next block in free list
+    nunits: usize,     // Number of units (= size of Header) in this block
 }
 
-static mut BASE: Header = Header {
-    ptr: core::ptr::null_mut(),
-    size: 0,
+// Neighbor block address
+unsafe fn nbr(p: *mut Header) -> *mut Header {
+    p.add((*p).nunits)
+}
+
+// Check if p and q are neighbor blocks (p is before q)
+unsafe fn is_nbr(p: *mut Header, q: *mut Header) -> bool {
+    nbr(p) == q
+}
+
+// First block
+static mut FIRST_BLOCK: Header = Header {
+    next: core::ptr::null_mut(),
+    nunits: 0,
 };
-static mut FREEP: *mut Header = core::ptr::null_mut();
+// Free block list. It is a circular list.
+static mut FREE_BLOCK_LIST: *mut Header = core::ptr::null_mut();
 
 pub struct TinyAllocator;
 
@@ -30,89 +42,99 @@ unsafe impl GlobalAlloc for TinyAllocator {
 }
 
 pub unsafe fn malloc(nbytes: usize) -> *mut u8 {
-    let mut p: *mut Header;
-    let mut prevp: *mut Header;
+    // Init FIRST_BLOCK if it is not initialized.
+    if FIRST_BLOCK.next.is_null() {
+        FIRST_BLOCK.next = &mut FIRST_BLOCK as *mut Header;
+    }
+    // Init FREE_BLOCK_LIST if it is not initialized.
+    if FREE_BLOCK_LIST.is_null() {
+        FREE_BLOCK_LIST = &mut FIRST_BLOCK as *mut Header;
+    }
+
     // Require additional 1 unit for Header
     let nunits = (nbytes + core::mem::size_of::<Header>() - 1) / core::mem::size_of::<Header>() + 1;
 
-    if FREEP.is_null() {
-        BASE.ptr = &mut BASE as *mut Header; // Circular list
-        BASE.size = 0;
-        FREEP = &mut BASE as *mut Header;
-    }
-
-    prevp = FREEP;
-    p = (*prevp).ptr;
+    let mut prevp: *mut Header = FREE_BLOCK_LIST;
+    let mut p: *mut Header = (*prevp).next;
 
     loop {
-        if (*p).size >= nunits {
-            if (*p).size == nunits {
-                // Remove this block (= p) from list.
-                (*prevp).ptr = (*p).ptr;
+        if (*p).nunits >= nunits {
+            if (*p).nunits == nunits {
+                // Remove this block (= p) from free list.
+                (*prevp).next = (*p).next;
             } else {
-                (*p).size -= nunits;
-                p = p.add((*p).size);
-                (*p).size = nunits;
+                (*p).nunits -= nunits;
+                p = p.add((*p).nunits);
+                (*p).nunits = nunits;
             }
-            FREEP = prevp;
+            FREE_BLOCK_LIST = prevp;
+            // Skip header
             return p.add(1) as *mut u8;
         }
 
-        if p == FREEP {
-            // Need more memory
-            let p_new = morecore(nunits);
-            if p_new.is_null() {
+        if p == FREE_BLOCK_LIST {
+            // Checked all blocks in free list, but could not find enough memory.
+            // Try to get more memory.
+            let success = sbrk(nunits);
+            if !success {
                 return core::ptr::null_mut();
             }
+            // morecore adds a new block to the free list. It will be returned later.
         }
 
         prevp = p;
-        p = (*p).ptr;
+        p = (*p).next;
     }
 }
 
-unsafe fn morecore(nu: usize) -> *mut Header {
-    let n = if nu < 4096 { 4096 } else { nu };
-    let p = syscall::sbrk((n * core::mem::size_of::<Header>()) as isize);
+unsafe fn sbrk(nunits: usize) -> bool {
+    let nunits = if nunits < 4096 { 4096 } else { nunits };
+    let p = syscall::sbrk((nunits * core::mem::size_of::<Header>()) as isize);
     if p == -1 {
-        return core::ptr::null_mut();
+        return false;
     }
 
-    let hp = p as *mut Header;
-    (*hp).size = n;
-    free((hp.add(1)) as *mut u8);
-    FREEP
+    let p = p as *mut Header;
+    (*p).nunits = nunits;
+    // sbrk increases memory size, so p should be the last block in free list.
+    free((p.add(1)) as *mut u8);
+    true
 }
 
-pub unsafe fn free(ap: *mut u8) {
-    let mut bp: *mut Header = (ap as *mut Header).offset(-1);
-    let mut p: *mut Header = FREEP;
+pub unsafe fn free(targetp: *mut u8) {
+    let mut p: *mut Header = (targetp as *mut Header).offset(-1);
+    let mut prevp: *mut Header = FREE_BLOCK_LIST;
 
     // Find insertion point
-    while !(bp > p && bp < (*p).ptr) {
-        if p >= (*p).ptr && (bp > p || bp < (*p).ptr) {
+    while !(prevp < p && p < (*prevp).next) {
+        if (*prevp).next <= prevp && (prevp < p || p < (*prevp).next) {
             break; // At ends of list
         }
-        p = (*p).ptr;
+        prevp = (*prevp).next;
     }
+    // Now p is between prevp and (*prevp).next.
+    // Insert p, and merge neighbor blocks if possible.
 
-    // Join to upper nbr
-    if bp.add((*bp).size) == (*p).ptr {
-        (*bp).size += (*(*p).ptr).size;
-        (*bp).ptr = (*(*p).ptr).ptr;
+    let nextp = (*prevp).next;
+    if is_nbr(p, nextp) {
+        merge(p, nextp);
     } else {
-        (*bp).ptr = (*p).ptr;
+        (*p).next = nextp;
     }
 
-    // Join to lower nbr
-    if p.add((*p).size) == bp {
-        (*p).size += (*bp).size;
-        (*p).ptr = (*bp).ptr;
+    if is_nbr(prevp, p) {
+        merge(prevp, p);
     } else {
-        (*p).ptr = bp;
+        (*prevp).next = p;
     }
 
-    FREEP = p;
+    FREE_BLOCK_LIST = prevp;
+}
+
+// Merge p and q. Assume p and q are neighbor blocks.
+unsafe fn merge(p: *mut Header, q: *mut Header) {
+    (*p).nunits += (*q).nunits;
+    (*p).next = (*q).next;
 }
 
 #[alloc_error_handler]
