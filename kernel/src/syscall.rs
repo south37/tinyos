@@ -1,6 +1,6 @@
-use crate::gdt::{KCODE_SELECTOR, KDATA_SELECTOR, tss_addr};
+use crate::gdt::{tss_addr, KCODE_SELECTOR, KDATA_SELECTOR};
 use crate::util::{
-    EFER_SCE, MSR_EFER, MSR_KERNEL_GS_BASE, MSR_LSTAR, MSR_SFMASK, MSR_STAR, rdmsr, wrmsr,
+    rdmsr, wrmsr, EFER_SCE, MSR_EFER, MSR_KERNEL_GS_BASE, MSR_LSTAR, MSR_SFMASK, MSR_STAR,
 };
 
 pub fn init(cpuid: usize) {
@@ -42,6 +42,8 @@ use crate::trap::TrapFrame;
 
 pub const SYS_READ: u64 = 0;
 pub const SYS_WRITE: u64 = 1;
+pub const SYS_OPEN: u64 = 2;
+pub const SYS_CLOSE: u64 = 3;
 pub const SYS_FORK: u64 = 57;
 pub const SYS_EXEC: u64 = 59;
 pub const SYS_EXIT: u64 = 60;
@@ -59,6 +61,8 @@ pub fn syscall() {
     let ret = match num {
         SYS_READ => sys_read(tf),
         SYS_WRITE => sys_write(tf),
+        SYS_OPEN => sys_open(tf),
+        SYS_CLOSE => sys_close(tf),
         SYS_EXEC => sys_exec(tf),
         SYS_FORK => sys_fork(tf),
         SYS_EXIT => sys_exit(tf),
@@ -178,8 +182,8 @@ fn sys_exit(tf: &TrapFrame) -> isize {
 
 fn sys_wait(tf: &TrapFrame) -> isize {
     let _pid = argint(0, tf) as isize; // We don't support waiting for specific PID yet in bare wait?
-    // Actually standard wait(status) waits for ANY child. waitpid(pid, status, options) waits for specific.
-    // Let's implement wait() as wait for any child.
+                                       // Actually standard wait(status) waits for ANY child. waitpid(pid, status, options) waits for specific.
+                                       // Let's implement wait() as wait for any child.
     crate::proc::wait(-1)
 }
 
@@ -201,4 +205,68 @@ fn sys_write(tf: &TrapFrame) -> isize {
     let ptr = argptr(1, tf);
     let n = argint(2, tf);
     crate::file::filewrite(f, ptr, n)
+}
+
+fn sys_open(tf: &TrapFrame) -> isize {
+    let path = match argstr(0, tf) {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    let mode = argint(1, tf);
+
+    // 1. Alloc file
+    let f = match crate::file::filealloc() {
+        Some(f) => f,
+        None => return -1,
+    };
+
+    // 2. Open inode
+    let ip = match crate::fs::namei(path) {
+        Some(ip) => ip,
+        None => {
+            f.refcnt = 0; // Manual rollback
+            return -1;
+        }
+    };
+
+    f.f_type = crate::file::FileType::Inode;
+    f.ip = Some(ip);
+    f.off = 0;
+    f.readable = true;
+    f.writable = false;
+    // TODO: use mode
+    if mode != 0 {}
+
+    // 3. Alloc fd
+    #[allow(static_mut_refs)]
+    let p = unsafe { &mut *mycpu().process.unwrap() };
+    for (i, fd_slot) in p.ofile.iter_mut().enumerate() {
+        if fd_slot.is_none() {
+            *fd_slot = Some(f as *mut crate::file::File);
+            return i as isize;
+        }
+    }
+
+    // Fail
+    f.refcnt = 0;
+    -1
+}
+
+fn sys_close(tf: &TrapFrame) -> isize {
+    let fd = argint(0, tf) as usize;
+    #[allow(static_mut_refs)]
+    let p = unsafe { &mut *mycpu().process.unwrap() };
+
+    if fd >= p.ofile.len() {
+        return -1;
+    }
+
+    if let Some(f_ptr) = p.ofile[fd] {
+        p.ofile[fd] = None;
+        unsafe {
+            crate::file::fileclose(&mut *f_ptr);
+        }
+        return 0;
+    }
+    -1
 }

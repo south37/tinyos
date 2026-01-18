@@ -1,5 +1,6 @@
 # Build
 /build
+/target
 disk.img
 /kernel/asm/build
 /kernel/target

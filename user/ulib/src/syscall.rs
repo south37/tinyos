@@ -2,6 +2,8 @@ use core::arch::asm;
 
 pub const SYS_READ: usize = 0;
 pub const SYS_WRITE: usize = 1;
+pub const SYS_OPEN: usize = 2;
+pub const SYS_CLOSE: usize = 3;
 pub const SYS_FORK: usize = 57;
 pub const SYS_EXEC: usize = 59;
 pub const SYS_EXIT: usize = 60;
@@ -112,5 +114,28 @@ pub fn exec(path: *const u8, argv: &[*const u8]) -> i32 {
     }
 }
 
-// Safer exec if possible?
-// We will rely on user to pass null-terminated strings for now or add helper.
+// Safer exec is hard without alloc.
+
+pub fn open(path: &str, mode: i32) -> i32 {
+    // We need null-terminated path.
+    // Ideally we assume path is null-terminated or we copy to stack buffer.
+    // For now, let's just pass pointer and hope user provided null-terminated or use a small buffer.
+    // Since we can't allocate, we can't easily append null.
+    // BUT we can check if it ends with null?
+    // Rust strings are not null terminated.
+    // Let's implement a small stack buffer copy for open since paths are usually short.
+    let mut buf = [0u8; 128];
+    if path.len() >= 128 {
+        return -1;
+    }
+    for (i, b) in path.bytes().enumerate() {
+        buf[i] = b;
+    }
+    buf[path.len()] = 0;
+
+    unsafe { syscall2(SYS_OPEN, buf.as_ptr() as usize, mode as usize) as i32 }
+}
+
+pub fn close(fd: i32) -> i32 {
+    unsafe { syscall1(SYS_CLOSE, fd as usize) as i32 }
+}

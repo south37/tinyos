@@ -56,6 +56,7 @@ fs: user
 	cp user/build/init build/fs/
 	cp user/build/sh build/fs/
 	cp user/build/echo build/fs/
+	cp user/build/ls build/fs/
 	dd if=/dev/zero of=$(DISK_IMG) bs=1M count=32
 	$(MKFS) -E revision=0 -b 1024 -d build/fs -F $(DISK_IMG)
 

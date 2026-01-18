@@ -18,6 +18,7 @@ UPROGS=\
 	$(BUILD_DIR)/init\
 	$(BUILD_DIR)/sh\
 	$(BUILD_DIR)/echo\
+	$(BUILD_DIR)/ls\
 
 all: $(UPROGS)
 
@@ -32,6 +33,10 @@ $(BUILD_DIR)/sh: sh/src/main.rs | $(BUILD_DIR)
 $(BUILD_DIR)/echo: echo/src/main.rs | $(BUILD_DIR)
 	$(CARGO) build -p echo $(CARGO_FLAGS)
 	cp $(TARGET_DIR)/echo $@
+
+$(BUILD_DIR)/ls: ls/src/main.rs | $(BUILD_DIR)
+	$(CARGO) build -p ls $(CARGO_FLAGS)
+	cp $(TARGET_DIR)/ls $@
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)

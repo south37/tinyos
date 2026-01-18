@@ -3,7 +3,7 @@ members = [
     "ulib",
     "init",
     "sh",
-    "echo",
+    "echo", "ls",
 ]
 resolver = "2"
 
