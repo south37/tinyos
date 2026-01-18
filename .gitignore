@@ -1,9 +1,8 @@
 # Build
-/target
 /build
-*.o
-*.img
+disk.img
 /kernel/asm/build
+/kernel/target
 /user/build
 /user/target
 

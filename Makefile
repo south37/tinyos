@@ -8,10 +8,11 @@ QEMU ?= qemu-system-x86_64
 MKFS ?= mkfs.ext2
 LOG ?= info
 export LOG_LEVEL := $(LOG)
+TARGET := x86_64-unknown-none
 
 # Paths
 TARGET_DIR := target/x86_64-unknown-none/$(PROFILE)
-KERNEL_BIN := $(TARGET_DIR)/kernel
+KERNEL_BIN := kernel/target/$(TARGET)/$(PROFILE)/kernel
 DISK_IMG := disk.img
 
 # Flags
@@ -76,5 +77,5 @@ gdb:
 clean:
 	$(MAKE) -C kernel/asm clean
 	$(MAKE) -C user clean
-	$(CARGO) clean
+	cd kernel && $(CARGO) clean
 	rm -rf build $(DISK_IMG) qemu.log

@@ -4,4 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Add dependencies here if there were any in root Cargo.toml (checked previously, none)
+
+[profile.release]
+panic = "abort"
+
+[profile.dev]
+panic = "abort"

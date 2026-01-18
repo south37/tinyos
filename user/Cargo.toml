@@ -1,10 +1,9 @@
 [workspace]
 members = [
-    "kernel",
-    "user/ulib",
-    "user/init",
-    "user/sh",
-    "user/echo"
+    "ulib",
+    "init",
+    "sh",
+    "echo",
 ]
 resolver = "2"
 

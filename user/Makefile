@@ -5,10 +5,10 @@ PROFILE ?= release
 
 ifneq ($(PROFILE),release)
 	CARGO_FLAGS = --target $(TARGET)
-	TARGET_DIR = ../target/$(TARGET)/debug
+	TARGET_DIR = target/$(TARGET)/debug
 else
 	CARGO_FLAGS = --release --target $(TARGET)
-	TARGET_DIR = ../target/$(TARGET)/release
+	TARGET_DIR = target/$(TARGET)/release
 endif
 
 # Override RUSTFLAGS to ignore root .cargo/config.toml headers and set user-specific flags
