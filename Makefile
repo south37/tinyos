@@ -6,7 +6,7 @@ PHYS_MEM ?= 256M
 CARGO ?= cargo
 QEMU ?= qemu-system-x86_64
 MKFS ?= mkfs.ext2
-LOG ?= info
+LOG ?= debug
 export LOG_LEVEL := $(LOG)
 TARGET := x86_64-unknown-none
 
@@ -58,6 +58,8 @@ fs: user
 	cp user/build/echo build/fs/
 	cp user/build/ls build/fs/
 	cp user/build/malloc_test build/fs/
+	cp user/build/cat build/fs/
+	cp user/build/wc build/fs/
 	dd if=/dev/zero of=$(DISK_IMG) bs=1M count=32
 	$(MKFS) -E revision=0 -b 1024 -d build/fs -F $(DISK_IMG)
 

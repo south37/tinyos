@@ -335,3 +335,77 @@ pub fn uvm_dealloc(
     }
     new_sz
 }
+
+pub fn copyin(
+    pgdir: *mut PageTable,
+    allocator: &mut Allocator,
+    dst: *mut u8,
+    va: u64,
+    len: usize,
+) -> bool {
+    let mut dst = dst;
+    let mut len = len;
+    let mut va = va;
+
+    while len > 0 {
+        let va0 = (va as usize) & !(PG_SIZE - 1);
+        let src_ptr = match walk(pgdir, allocator, va0 as u64, false, 0) {
+            Some(pte) => {
+                if !pte.is_present() {
+                    return false;
+                }
+                // TODO: Check user permission?
+                p2v(pte.addr() as usize) as *const u8
+            }
+            None => return false,
+        };
+
+        let n = core::cmp::min(PG_SIZE - (va as usize - va0), len);
+        unsafe {
+            let src = src_ptr.add(va as usize - va0);
+            core::ptr::copy_nonoverlapping(src, dst, n);
+            dst = dst.add(n);
+        }
+
+        len -= n;
+        va += n as u64;
+    }
+    true
+}
+
+pub fn copyout(
+    pgdir: *mut PageTable,
+    allocator: &mut Allocator,
+    va: u64,
+    src: *const u8,
+    len: usize,
+) -> bool {
+    let mut src = src;
+    let mut len = len;
+    let mut va = va;
+
+    while len > 0 {
+        let va0 = (va as usize) & !(PG_SIZE - 1);
+        let dst_ptr = match walk(pgdir, allocator, va0 as u64, false, 0) {
+            Some(pte) => {
+                if !pte.is_present() {
+                    return false;
+                }
+                // TODO: Check user/write permission?
+                p2v(pte.addr() as usize) as *mut u8
+            }
+            None => return false,
+        };
+
+        let n = core::cmp::min(PG_SIZE - (va as usize - va0), len);
+        unsafe {
+            let dst = dst_ptr.add(va as usize - va0);
+            core::ptr::copy_nonoverlapping(src, dst, n);
+            src = src.add(n);
+        }
+
+        len -= n;
+        va += n as u64;
+    }
+    true
+}

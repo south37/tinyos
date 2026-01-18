@@ -16,6 +16,7 @@ mod ioapic;
 mod lapic;
 mod log;
 mod pci;
+mod pipe;
 mod proc;
 mod sleeplock;
 mod spinlock;

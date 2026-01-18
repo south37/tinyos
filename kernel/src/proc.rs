@@ -414,12 +414,11 @@ pub fn fork() -> isize {
 
     // Allocate process
     let mut np_opt = None;
-    let guard = PROCS_LOCK.lock();
+    let mut guard = PROCS_LOCK.lock();
     unsafe {
         for p in PROCS.iter_mut() {
             if p.state == ProcessState::UNUSED {
                 np_opt = Some(p);
-                // i = idx as isize;
                 break;
             }
         }
@@ -427,40 +426,58 @@ pub fn fork() -> isize {
 
     if let Some(np) = np_opt {
         unsafe {
+            PID_COUNTER += 1;
+            np.pid = PID_COUNTER;
+            pid = np.pid as isize;
+            np.state = ProcessState::EMBRYO;
+        }
+        // Drop lock to avoid deadlock with filedup (FTABLE lock)
+        drop(guard);
+
+        unsafe {
             // Allocate kernel stack
             np.kstack = crate::allocator::ALLOCATOR.lock().kalloc();
             if np.kstack.is_null() {
+                // Cleanup
+                guard = PROCS_LOCK.lock();
+                np.state = ProcessState::UNUSED;
+                // pid assignment is permanent? PID_COUNTER incremented. That's fine.
                 drop(guard);
                 return -1;
             }
 
             // Copy user memory
-            np.pgdir = vm::uvm_create(&mut crate::allocator::ALLOCATOR.lock())
-                .expect("fork: uvm_create failed");
-            // Assuming simplified uvm_copy for now: size is implicitly managed or we just copy known range?
-            // Since we don't track proc size strictly yet, let's assume valid range up to KERNBASE
-            // But standard approach is maintaining 'sz' in proc.
-            // For this simple text, let's just copy 0..0x40000000 (1GB) if mapped? Too slow.
-            // Let's rely on `sz` in process if we added it, or copy what we can.
-            // Wait, we didn't add `sz` to Process struct. Let's add it or hack it.
-            // Hack: Walk page table and copy present pages. uvm_copy(old, new, 0x80000000).
+            match vm::uvm_create(&mut crate::allocator::ALLOCATOR.lock()) {
+                Some(pgdir) => np.pgdir = pgdir,
+                None => {
+                    // Cleanup kstack
+                    // crate::allocator::ALLOCATOR.lock().kfree(np.kstack); // TODO implementations
+                    guard = PROCS_LOCK.lock();
+                    np.kstack = core::ptr::null_mut();
+                    np.state = ProcessState::UNUSED;
+                    drop(guard);
+                    return -1;
+                }
+            }
+
             if !vm::uvm_copy(
                 curproc.pgdir,
                 np.pgdir,
                 curproc.sz as u64,
                 &mut crate::allocator::ALLOCATOR.lock(),
             ) {
-                // TODO: Free kstack
+                // Cleanup
+                guard = PROCS_LOCK.lock();
+                // Helper to free vm and stack?
+                // For now just leakage or manual cleanup if implemented
+                np.pgdir = core::ptr::null_mut(); // Leak?
+                np.kstack = core::ptr::null_mut();
+                np.state = ProcessState::UNUSED;
                 drop(guard);
                 return -1;
             }
 
             np.sz = curproc.sz;
-
-            PID_COUNTER += 1;
-            np.pid = PID_COUNTER;
-            pid = np.pid as isize;
-            np.state = ProcessState::EMBRYO;
 
             // Copy trap frame
             let sp = np.kstack as usize + KSTACK_SIZE;
@@ -488,18 +505,16 @@ pub fn fork() -> isize {
             // Copy open files
             for fd in 0..NFILE {
                 if let Some(f) = curproc.ofile[fd] {
-                    // TODO: filedup(f); increment ref count
+                    crate::file::filedup(&mut *f);
                     np.ofile[fd] = Some(f);
                 }
             }
-            // Copy cwd
-            // np.cwd = idup(curproc.cwd);
-
             // Safely copying name
             np.name = curproc.name;
 
+            // Re-acquire lock to set state and parent
+            guard = PROCS_LOCK.lock();
             np.parent = Some(curproc as *mut Process);
-
             np.state = ProcessState::RUNNABLE;
         }
     } else {
@@ -518,7 +533,12 @@ pub fn exit(status: isize) {
     crate::info!("Exit: pid={} status={}", curproc.pid, status);
 
     // Close all open files
-    // for fd in 0..NFILE { ... }
+    for fd in 0..NFILE {
+        if let Some(mut f) = curproc.ofile[fd] {
+            curproc.ofile[fd] = None;
+            unsafe { crate::file::fileclose(&mut *f) };
+        }
+    }
 
     let guard = PROCS_LOCK.lock();
 

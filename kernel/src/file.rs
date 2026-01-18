@@ -1,4 +1,5 @@
 use crate::fs::Inode;
+use crate::pipe::PipeData;
 use crate::spinlock::Spinlock;
 
 pub const NFILE: usize = 100; // Open files per system
@@ -17,7 +18,7 @@ pub struct File {
     pub refcnt: usize,
     pub readable: bool,
     pub writable: bool,
-    pub pipe: usize, // Placeholder for pipe
+    pub pipe: Option<*mut Spinlock<PipeData>>,
     pub ip: Option<&'static Inode>,
     pub off: u32,
     pub major: u16, // For devices
@@ -30,7 +31,7 @@ impl File {
             refcnt: 0,
             readable: false,
             writable: false,
-            pipe: 0,
+            pipe: None,
             ip: None,
             off: 0,
             major: 0,
@@ -60,6 +61,19 @@ pub fn filealloc() -> Option<&'static mut File> {
     None
 }
 
+pub fn filedup(f: &mut File) -> &mut File {
+    let _ft = FTABLE.lock(); // Lock table to protect refcnt?
+                             // refcnt is not atomic, so we need lock.
+                             // wait, FTABLE lock protects file allocation.
+                             // manipulating refcnt of allocated file should probably be protected too if we don't have per-file lock.
+                             // FTABLE lock is coarse grained but safe.
+    if f.refcnt < 1 {
+        panic!("filedup");
+    }
+    f.refcnt += 1;
+    f
+}
+
 pub fn fileclose(f: &mut File) {
     let mut ft = FTABLE.lock();
     if f.refcnt < 1 {
@@ -70,9 +84,15 @@ pub fn fileclose(f: &mut File) {
         return;
     }
 
-    if f.f_type == FileType::Inode {
+    if f.f_type == FileType::Inode || f.f_type == FileType::Device {
         if let Some(ip) = f.ip {
             crate::fs::iput(ip);
+        }
+    }
+
+    if f.f_type == FileType::Pipe {
+        if let Some(pi) = f.pipe {
+            crate::pipe::pipeclose(pi, f.writable);
         }
     }
 
@@ -93,7 +113,9 @@ pub fn fileread(f: &mut File, addr: u64, n: usize) -> isize {
 
     match f.f_type {
         FileType::Pipe => {
-            // TODO
+            if let Some(pi) = f.pipe {
+                return crate::pipe::piperead(pi, addr, n);
+            }
             -1
         }
         FileType::Device => {
@@ -135,7 +157,9 @@ pub fn filewrite(f: &mut File, addr: u64, n: usize) -> isize {
 
     match f.f_type {
         FileType::Pipe => {
-            // TODO
+            if let Some(pi) = f.pipe {
+                return crate::pipe::pipewrite(pi, addr, n);
+            }
             -1
         }
         FileType::Device => {

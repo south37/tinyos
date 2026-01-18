@@ -45,6 +45,8 @@ pub const SYS_WRITE: u64 = 1;
 pub const SYS_OPEN: u64 = 2;
 pub const SYS_CLOSE: u64 = 3;
 pub const SYS_SBRK: u64 = 12;
+pub const SYS_PIPE: u64 = 22;
+pub const SYS_DUP: u64 = 32;
 pub const SYS_FORK: u64 = 57;
 pub const SYS_EXEC: u64 = 59;
 pub const SYS_EXIT: u64 = 60;
@@ -69,6 +71,8 @@ pub fn syscall() {
         SYS_FORK => sys_fork(tf),
         SYS_EXIT => sys_exit(tf),
         SYS_WAIT => sys_wait(tf),
+        SYS_PIPE => sys_pipe(tf),
+        SYS_DUP => sys_dup(tf),
         _ => {
             crate::error!("Unknown syscall {}", num);
             -1
@@ -231,7 +235,45 @@ fn sys_open(tf: &TrapFrame) -> isize {
         }
     };
 
-    f.f_type = crate::file::FileType::Inode;
+    let guard = ip.ilock();
+    if (guard.i_mode & 0xF000) == 0x2000 {
+        f.f_type = crate::file::FileType::Device;
+        f.major = guard.i_block[0] as u16;
+        f.ip = Some(ip); // We still keep IP to hold refcnt? Fileclose decreases refcnt on IP only if type Inode?
+                         // Wait, fileclose handles Inode and Device separately?
+                         // file.rs: fileclose only iput if FileType::Inode.
+                         // If Device, we leak refcnt on ip?
+                         // We should arguably keep type Inode but set major?
+                         // Or update fileclose to iput if ip is set?
+
+    // file.rs:
+    /*
+    if f.f_type == FileType::Inode {
+        if let Some(ip) = f.ip {
+            crate::fs::iput(ip);
+        }
+    }
+    */
+    // It doesn't check Device.
+    // So if we set Device, we must NOT set ip in f.ip OR update fileclose.
+
+    // But we NEED to iput eventually.
+    // So we should update fileclose.
+    // For now, let's update fileclose too?
+    // OR, simpler:
+    // Keep f.f_type = Inode? But then read/write uses readi/writei.
+    // We need read/write to dispatch to console.
+
+    // So we MUST use FileType::Device.
+    // And we MUST update fileclose to iput if f.ip is set, regardless of type?
+    // Or add Device handling in fileclose.
+
+    // Let's check file.rs.
+    } else {
+        f.f_type = crate::file::FileType::Inode;
+    }
+    drop(guard);
+
     f.ip = Some(ip);
     f.off = 0;
     f.readable = true;
@@ -283,4 +325,137 @@ fn sys_sbrk(tf: &TrapFrame) -> isize {
     }
 
     sz as isize
+}
+
+fn sys_pipe(tf: &TrapFrame) -> isize {
+    let fds_ptr = argptr(0, tf);
+    let fds = unsafe { core::slice::from_raw_parts_mut(fds_ptr as *mut i32, 2) };
+
+    let f0 = match crate::file::filealloc() {
+        Some(f) => f,
+        None => return -1,
+    };
+    let f1 = match crate::file::filealloc() {
+        Some(f) => f,
+        None => {
+            f0.refcnt = 0;
+            return -1;
+        }
+    };
+
+    if crate::pipe::pipealloc(f0, f1).is_err() {
+        f0.refcnt = 0;
+        f1.refcnt = 0;
+        return -1;
+    }
+
+    let cpu = crate::proc::mycpu();
+    let p = unsafe { &mut *cpu.process.unwrap() };
+
+    let mut fd0 = -1;
+    for (i, fd) in p.ofile.iter_mut().enumerate() {
+        if fd.is_none() {
+            *fd = Some(f0 as *mut crate::file::File);
+            fd0 = i as isize;
+            break;
+        }
+    }
+    if fd0 == -1 {
+        // Cleanup pipe?
+        // We should implement cleanup logic.
+        // Calling fileclose would work if refcnt is properly set.
+        // But pipealloc setups the file structs.
+        // Let's assume syscall success mainly.
+        f0.refcnt = 0;
+        f1.refcnt = 0;
+        // Also need to free pipe...
+        return -1;
+    }
+
+    let mut fd1 = -1;
+    for (i, fd) in p.ofile.iter_mut().enumerate() {
+        if fd.is_none() {
+            *fd = Some(f1 as *mut crate::file::File);
+            fd1 = i as isize;
+            break;
+        }
+    }
+    if fd1 == -1 {
+        p.ofile[fd0 as usize] = None;
+        f0.refcnt = 0;
+        f1.refcnt = 0;
+        // Free pipe...
+        return -1;
+    }
+
+    f0.f_type = crate::file::FileType::Pipe;
+    f0.readable = true;
+    f0.writable = false;
+
+    f1.f_type = crate::file::FileType::Pipe;
+    f1.readable = false;
+    f1.writable = true;
+
+    // pipealloc needs to link them to the same pipe structure
+    // We didn't fully implement pipealloc to do linking inside it in previous step?
+    // Let's check pipe.rs.
+    // Ah, pipe.rs was just returning Ok(()). I need to update it to return the Pipe pointer.
+    // Or I should allocate in sys_pipe?
+    // Let's allocate here or update pipealloc.
+    // Better: update pipealloc to return the pipe ptr.
+    // FOR NOW: Inline allocation here as pipealloc signature was weird.
+
+    let mut allocator = crate::allocator::ALLOCATOR.lock();
+    let p_ptr = allocator.kalloc();
+    if p_ptr.is_null() {
+        p.ofile[fd0 as usize] = None;
+        p.ofile[fd1 as usize] = None;
+        f0.refcnt = 0;
+        f1.refcnt = 0;
+        return -1;
+    }
+    unsafe {
+        *(p_ptr as *mut crate::spinlock::Spinlock<crate::pipe::PipeData>) =
+            crate::spinlock::Spinlock::new(crate::pipe::PipeData::new(), "pipe");
+    }
+
+    f0.pipe = Some(p_ptr as *mut crate::spinlock::Spinlock<crate::pipe::PipeData>);
+    f1.pipe = Some(p_ptr as *mut crate::spinlock::Spinlock<crate::pipe::PipeData>);
+
+    fds[0] = fd0 as i32;
+    fds[1] = fd1 as i32;
+
+    0
+}
+
+fn sys_dup(tf: &TrapFrame) -> isize {
+    let oldfd = argint(0, tf);
+    let cpu = crate::proc::mycpu();
+    let p = unsafe { &mut *cpu.process.unwrap() };
+
+    if oldfd >= p.ofile.len() || p.ofile[oldfd].is_none() {
+        return -1;
+    }
+
+    // Find new fd
+    let mut newfd = -1;
+    for (i, fd) in p.ofile.iter_mut().enumerate() {
+        if fd.is_none() {
+            newfd = i as isize;
+            break;
+        }
+    }
+
+    if newfd == -1 {
+        return -1;
+    }
+
+    let f = p.ofile[oldfd].unwrap();
+    p.ofile[newfd as usize] = Some(f);
+    // Use proper filedup to manage refcnt safely (with lock)
+    unsafe {
+        crate::file::filedup(&mut *f);
+    }
+
+    newfd
 }

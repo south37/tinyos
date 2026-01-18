@@ -20,6 +20,8 @@ UPROGS=\
 	$(BUILD_DIR)/echo\
 	$(BUILD_DIR)/ls\
 	$(BUILD_DIR)/malloc_test\
+	$(BUILD_DIR)/cat\
+	$(BUILD_DIR)/wc\
 
 all: $(UPROGS)
 
@@ -42,6 +44,14 @@ $(BUILD_DIR)/ls: ls/src/main.rs | $(BUILD_DIR)
 $(BUILD_DIR)/malloc_test: malloc_test/src/main.rs | $(BUILD_DIR)
 	$(CARGO) build -p malloc_test $(CARGO_FLAGS)
 	cp $(TARGET_DIR)/malloc_test $@
+
+$(BUILD_DIR)/cat: cat/src/main.rs | $(BUILD_DIR)
+	$(CARGO) build -p cat $(CARGO_FLAGS)
+	cp $(TARGET_DIR)/cat $@
+
+$(BUILD_DIR)/wc: wc/src/main.rs | $(BUILD_DIR)
+	$(CARGO) build -p wc $(CARGO_FLAGS)
+	cp $(TARGET_DIR)/wc $@
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)

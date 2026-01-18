@@ -9,6 +9,8 @@ pub const SYS_FORK: usize = 57;
 pub const SYS_EXEC: usize = 59;
 pub const SYS_EXIT: usize = 60;
 pub const SYS_WAIT: usize = 61;
+pub const SYS_PIPE: usize = 22;
+pub const SYS_DUP: usize = 32;
 
 #[inline(always)]
 pub unsafe fn syscall0(num: usize) -> usize {
@@ -143,4 +145,12 @@ pub fn close(fd: i32) -> i32 {
 
 pub fn sbrk(n: isize) -> isize {
     unsafe { syscall1(SYS_SBRK as usize, n as usize) as isize }
+}
+
+pub fn dup(fd: i32) -> i32 {
+    unsafe { syscall1(SYS_DUP as usize, fd as usize) as i32 }
+}
+
+pub fn pipe(fds: &mut [i32; 2]) -> i32 {
+    unsafe { syscall1(SYS_PIPE as usize, fds.as_mut_ptr() as usize) as i32 }
 }
