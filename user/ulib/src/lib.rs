@@ -5,6 +5,7 @@ extern crate alloc as rust_alloc;
 use core::panic::PanicInfo;
 
 pub mod alloc;
+pub mod env;
 pub mod fs;
 pub mod io;
 pub mod syscall;

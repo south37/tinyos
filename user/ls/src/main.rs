@@ -1,15 +1,14 @@
 #![no_std]
 #![no_main]
 
-use ulib::{entry, fs::DirEntry, println, syscall};
+use ulib::{entry, env, fs::DirEntry, println, syscall};
 
 entry!(main);
 
 fn main(argc: usize, argv: *const *const u8) {
-    let path = if argc > 1 {
-        // Parse argv[1]
-        // TODO: helper to convert argv[i] to &str
-        "." // Placeholder, default to CWD (which is root for now)
+    let args = unsafe { env::args(argc, argv) };
+    let path = if args.len() > 1 {
+        args[1].to_str().unwrap()
     } else {
         "."
     };

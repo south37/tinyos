@@ -2,7 +2,7 @@ use crate::syscall;
 use core::alloc::{GlobalAlloc, Layout};
 
 #[repr(C)]
-// 16 bytes header
+// 16 bytes header for each block
 struct Header {
     next: *mut Header, // Next block in free list
     nunits: usize,     // Number of units (= size of Header) in this block
@@ -18,13 +18,18 @@ unsafe fn is_nbr(p: *mut Header, q: *mut Header) -> bool {
     nbr(p) == q
 }
 
-// First block
+// Bins for small sizes.
+const MIN_UNITS: usize = 2; // Minimum units (1 header + 1 data) => 16 bytes data
+const MAX_BIN_UNITS: usize = 31; // Max units for bins => 30*16 = 480 bytes data
+static mut BINS: [*mut Header; MAX_BIN_UNITS + 1] = [core::ptr::null_mut(); MAX_BIN_UNITS + 1];
+
+// First block for Large List sentinel
 static mut FIRST_BLOCK: Header = Header {
     next: core::ptr::null_mut(),
     nunits: 0,
 };
-// Free block list. It is a circular list.
-static mut FREE_BLOCK_LIST: *mut Header = core::ptr::null_mut();
+// Large free block list (circular, sorted by address).
+static mut LARGE_LIST: *mut Header = core::ptr::null_mut();
 
 pub struct TinyAllocator;
 
@@ -42,68 +47,96 @@ unsafe impl GlobalAlloc for TinyAllocator {
 }
 
 pub unsafe fn malloc(nbytes: usize) -> *mut u8 {
-    // Init FIRST_BLOCK if it is not initialized.
-    if FIRST_BLOCK.next.is_null() {
+    // Init LARGE_LIST if it is not initialized.
+    if LARGE_LIST.is_null() {
         FIRST_BLOCK.next = &mut FIRST_BLOCK as *mut Header;
-    }
-    // Init FREE_BLOCK_LIST if it is not initialized.
-    if FREE_BLOCK_LIST.is_null() {
-        FREE_BLOCK_LIST = &mut FIRST_BLOCK as *mut Header;
+        LARGE_LIST = &mut FIRST_BLOCK as *mut Header;
     }
 
     // Require additional 1 unit for Header
     let nunits = (nbytes + core::mem::size_of::<Header>() - 1) / core::mem::size_of::<Header>() + 1;
+    let nunits = if nunits < MIN_UNITS {
+        MIN_UNITS
+    } else {
+        nunits
+    };
 
-    let mut prevp: *mut Header = FREE_BLOCK_LIST;
+    // Check bins if small request
+    if nunits <= MAX_BIN_UNITS {
+        if !BINS[nunits].is_null() {
+            let p = BINS[nunits];
+            BINS[nunits] = (*p).next;
+            return p.add(1) as *mut u8;
+        }
+    }
+
+    // Allocate from LARGE_LIST
+    let mut prevp: *mut Header = LARGE_LIST;
     let mut p: *mut Header = (*prevp).next;
 
     loop {
         if (*p).nunits >= nunits {
             if (*p).nunits == nunits {
-                // Remove this block (= p) from free list.
+                // Exact match: Remove this block (= p) from free list.
                 (*prevp).next = (*p).next;
+                LARGE_LIST = prevp;
+                return p.add(1) as *mut u8;
             } else {
+                // Split: Use tail part (shrinking p stays in list)
                 (*p).nunits -= nunits;
-                p = p.add((*p).nunits);
-                (*p).nunits = nunits;
+                let ret_p = nbr(p);
+                (*ret_p).nunits = nunits;
+                // Since prevp is still in list, LARGE_LIST can point to prevp.
+                LARGE_LIST = prevp;
+                return ret_p.add(1) as *mut u8;
             }
-            FREE_BLOCK_LIST = prevp;
-            // Skip header
-            return p.add(1) as *mut u8;
         }
 
-        if p == FREE_BLOCK_LIST {
-            // Checked all blocks in free list, but could not find enough memory.
-            // Try to get more memory.
+        if p == LARGE_LIST {
+            // Checked all blocks in free list. Get more memory.
             let success = sbrk(nunits);
             if !success {
                 return core::ptr::null_mut();
             }
-            // morecore adds a new block to the free list. It will be returned later.
+            // sbrk inserts a new block to LARGE_LIST, and may set LARGE_LIST to prev of inserted block.
+            // To check the inserted block immediately, we reset prevp and p.
+            prevp = LARGE_LIST;
+            p = (*LARGE_LIST).next;
+        } else {
+            prevp = p;
+            p = (*p).next;
         }
-
-        prevp = p;
-        p = (*p).next;
     }
 }
 
 unsafe fn sbrk(nunits: usize) -> bool {
-    let nunits = if nunits < 4096 { 4096 } else { nunits };
-    let p = syscall::sbrk((nunits * core::mem::size_of::<Header>()) as isize);
+    let alloc_units = if nunits < 4096 { 4096 } else { nunits };
+    let p = syscall::sbrk((alloc_units * core::mem::size_of::<Header>()) as isize);
     if p == -1 {
         return false;
     }
 
     let p = p as *mut Header;
-    (*p).nunits = nunits;
-    // sbrk increases memory size, so p should be the last block in free list.
-    free((p.add(1)) as *mut u8);
+    (*p).nunits = alloc_units;
+    // Insert into LARGE_LIST
+    free_large(p);
     true
 }
 
 pub unsafe fn free(targetp: *mut u8) {
-    let mut p: *mut Header = (targetp as *mut Header).offset(-1);
-    let mut prevp: *mut Header = FREE_BLOCK_LIST;
+    let p = (targetp as *mut Header).offset(-1);
+    let nunits = (*p).nunits;
+
+    if nunits <= MAX_BIN_UNITS {
+        (*p).next = BINS[nunits];
+        BINS[nunits] = p;
+    } else {
+        free_large(p);
+    }
+}
+
+unsafe fn free_large(p: *mut Header) {
+    let mut prevp: *mut Header = LARGE_LIST;
 
     // Find insertion point
     while !(prevp < p && p < (*prevp).next) {
@@ -128,7 +161,7 @@ pub unsafe fn free(targetp: *mut u8) {
         (*prevp).next = p;
     }
 
-    FREE_BLOCK_LIST = prevp;
+    LARGE_LIST = prevp;
 }
 
 // Merge p and q. Assume p and q are neighbor blocks.
