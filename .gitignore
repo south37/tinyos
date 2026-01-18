@@ -5,6 +5,7 @@
 *.img
 /asm/build
 /user/build
+/user/target
 
 # Dev
 *.swp

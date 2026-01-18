@@ -1,9 +1,18 @@
-
-CC = gcc
-CFLAGS = -std=c99 -O2 -fno-builtin -fno-stack-protector -nostdlib -m64 -mcmodel=small -fno-pic -fno-pie -no-pie
-LDFLAGS = -e start -T user.ld
-
 BUILD_DIR = build
+CARGO = cargo
+TARGET = x86_64-unknown-none
+PROFILE ?= release
+
+ifneq ($(PROFILE),release)
+	CARGO_FLAGS =
+	TARGET_DIR = target/$(TARGET)/debug
+else
+	CARGO_FLAGS = --release
+	TARGET_DIR = target/$(TARGET)/release
+endif
+
+# Override RUSTFLAGS to ignore root .cargo/config.toml headers and set user-specific flags
+export RUSTFLAGS := -C link-arg=-Tuser.ld -C link-arg=-estart -C code-model=small -C relocation-model=static
 
 UPROGS=\
 	$(BUILD_DIR)/init\
@@ -12,17 +21,21 @@ UPROGS=\
 
 all: $(UPROGS)
 
-$(BUILD_DIR)/init: init.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+$(BUILD_DIR)/init: init/src/main.rs | $(BUILD_DIR)
+	$(CARGO) build -p init $(CARGO_FLAGS)
+	cp $(TARGET_DIR)/init $@
 
-$(BUILD_DIR)/sh: sh.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+$(BUILD_DIR)/sh: sh/src/main.rs | $(BUILD_DIR)
+	$(CARGO) build -p sh $(CARGO_FLAGS)
+	cp $(TARGET_DIR)/sh $@
 
-$(BUILD_DIR)/echo: echo.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+$(BUILD_DIR)/echo: echo/src/main.rs | $(BUILD_DIR)
+	$(CARGO) build -p echo $(CARGO_FLAGS)
+	cp $(TARGET_DIR)/echo $@
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 clean:
+	$(CARGO) clean
 	rm -rf $(BUILD_DIR)
