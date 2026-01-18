@@ -61,6 +61,8 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
 
     // 4. Load segments
     let mut off = elf.phoff;
+    let mut max_vaddr = 0;
+
     for _ in 0..elf.phnum {
         let mut ph = ProgramHeader {
             type_: 0,
@@ -95,6 +97,10 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
             // Overflow
             // TODO: Free pgdir
             return -1;
+        }
+
+        if ph.vaddr + ph.memsz > max_vaddr {
+            max_vaddr = ph.vaddr + ph.memsz;
         }
 
         // Allocate memory for segment
@@ -172,10 +178,11 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
         // ... (Skipping BSS zeroing for brevity, assuming filesz == memsz for simple tests or explicit init)
     }
     crate::debug!("exec: segments loaded");
-    // Arbitrary stack location: 0x80000000 ? Or just below high memory?
-    // Let's put it at 0x7FFFF000 usually?
-    let sz = 0x80000000; // Top of stack
-    let stack_base = sz - 2 * PG_SIZE as u64; // 2 pages
+
+    // Allocate stack next to loaded segments (+ guard page)
+    let sz = (max_vaddr + PG_SIZE as u64 - 1) & !(PG_SIZE as u64 - 1); // Round up
+    let stack_base = sz + PG_SIZE as u64; // Guard page
+    let stack_top = stack_base + 2 * PG_SIZE as u64;
 
     // Map stack
     {
@@ -205,10 +212,10 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
             PageTableEntry::WRITABLE | PageTableEntry::USER,
         );
     }
-    crate::debug!("exec: stack allocated");
+    crate::debug!("exec: stack allocated at {:x}-{:x}", stack_base, stack_top);
 
     // 5. Push arguments to stack
-    let mut sp = sz;
+    let mut sp = stack_top;
     let mut ustack = [0u64; 16]; // Max 16 args + null
 
     // Push strings
@@ -264,6 +271,7 @@ pub fn exec(path: &str, argv: &[&str]) -> isize {
         let old_pgdir = p.pgdir;
 
         p.pgdir = pgdir;
+        p.sz = stack_top as usize;
         p.state = crate::proc::ProcessState::RUNNING; // Redundant but clear
 
         // Update TrapFrame

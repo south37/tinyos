@@ -2,8 +2,9 @@ use core::arch::asm;
 
 pub const SYS_READ: usize = 0;
 pub const SYS_WRITE: usize = 1;
-pub const SYS_OPEN: usize = 2;
-pub const SYS_CLOSE: usize = 3;
+pub const SYS_OPEN: u64 = 2;
+pub const SYS_CLOSE: u64 = 3;
+pub const SYS_SBRK: u64 = 12;
 pub const SYS_FORK: usize = 57;
 pub const SYS_EXEC: usize = 59;
 pub const SYS_EXIT: usize = 60;
@@ -133,9 +134,13 @@ pub fn open(path: &str, mode: i32) -> i32 {
     }
     buf[path.len()] = 0;
 
-    unsafe { syscall2(SYS_OPEN, buf.as_ptr() as usize, mode as usize) as i32 }
+    unsafe { syscall2(SYS_OPEN as usize, buf.as_ptr() as usize, mode as usize) as i32 }
 }
 
 pub fn close(fd: i32) -> i32 {
-    unsafe { syscall1(SYS_CLOSE, fd as usize) as i32 }
+    unsafe { syscall1(SYS_CLOSE as usize, fd as usize) as i32 }
+}
+
+pub fn sbrk(n: isize) -> isize {
+    unsafe { syscall1(SYS_SBRK as usize, n as usize) as isize }
 }

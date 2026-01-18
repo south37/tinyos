@@ -44,6 +44,7 @@ pub const SYS_READ: u64 = 0;
 pub const SYS_WRITE: u64 = 1;
 pub const SYS_OPEN: u64 = 2;
 pub const SYS_CLOSE: u64 = 3;
+pub const SYS_SBRK: u64 = 12;
 pub const SYS_FORK: u64 = 57;
 pub const SYS_EXEC: u64 = 59;
 pub const SYS_EXIT: u64 = 60;
@@ -63,6 +64,7 @@ pub fn syscall() {
         SYS_WRITE => sys_write(tf),
         SYS_OPEN => sys_open(tf),
         SYS_CLOSE => sys_close(tf),
+        SYS_SBRK => sys_sbrk(tf),
         SYS_EXEC => sys_exec(tf),
         SYS_FORK => sys_fork(tf),
         SYS_EXIT => sys_exit(tf),
@@ -269,4 +271,16 @@ fn sys_close(tf: &TrapFrame) -> isize {
         return 0;
     }
     -1
+}
+
+fn sys_sbrk(tf: &TrapFrame) -> isize {
+    let n = argint(0, tf) as isize;
+    let cpu = crate::proc::mycpu();
+    let sz = unsafe { (*cpu.process.unwrap()).sz };
+
+    if crate::growproc::growproc(n).is_err() {
+        return -1;
+    }
+
+    sz as isize
 }

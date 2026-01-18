@@ -2,6 +2,7 @@
 
 use core::panic::PanicInfo;
 
+pub mod alloc;
 pub mod fs;
 pub mod io;
 pub mod syscall;

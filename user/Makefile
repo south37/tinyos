@@ -19,6 +19,7 @@ UPROGS=\
 	$(BUILD_DIR)/sh\
 	$(BUILD_DIR)/echo\
 	$(BUILD_DIR)/ls\
+	$(BUILD_DIR)/malloc_test\
 
 all: $(UPROGS)
 
@@ -37,6 +38,10 @@ $(BUILD_DIR)/echo: echo/src/main.rs | $(BUILD_DIR)
 $(BUILD_DIR)/ls: ls/src/main.rs | $(BUILD_DIR)
 	$(CARGO) build -p ls $(CARGO_FLAGS)
 	cp $(TARGET_DIR)/ls $@
+
+$(BUILD_DIR)/malloc_test: malloc_test/src/main.rs | $(BUILD_DIR)
+	$(CARGO) build -p malloc_test $(CARGO_FLAGS)
+	cp $(TARGET_DIR)/malloc_test $@
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)

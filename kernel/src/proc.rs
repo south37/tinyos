@@ -49,6 +49,7 @@ pub struct Process {
     pub ofile: [Option<*mut File>; NFILE],
     pub parent: Option<*mut Process>,
     pub killed: bool,
+    pub sz: usize,
 }
 
 impl Process {
@@ -64,6 +65,7 @@ impl Process {
             ofile: [None; NFILE],
             parent: None,
             killed: false,
+            sz: 0,
         }
     }
 }
@@ -345,6 +347,7 @@ pub fn init_process(allocator: &mut Allocator) {
                 p.ofile[i] = Some(f as *mut _);
             }
         }
+        p.sz = PG_SIZE; // Init code page
     }
 }
 
@@ -444,13 +447,15 @@ pub fn fork() -> isize {
             if !vm::uvm_copy(
                 curproc.pgdir,
                 np.pgdir,
-                0x80000000,
+                curproc.sz as u64,
                 &mut crate::allocator::ALLOCATOR.lock(),
             ) {
                 // TODO: Free kstack
                 drop(guard);
                 return -1;
             }
+
+            np.sz = curproc.sz;
 
             PID_COUNTER += 1;
             np.pid = PID_COUNTER;

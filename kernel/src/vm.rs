@@ -1,6 +1,6 @@
 use crate::allocator::Allocator;
 
-use crate::util::{PG_SIZE, p2v, v2p};
+use crate::util::{p2v, v2p, PG_SIZE};
 
 static mut KPGDIR: *mut PageTable = core::ptr::null_mut();
 
@@ -266,4 +266,72 @@ pub fn uvm_copy(
 
 fn pgrounddown(x: u64) -> u64 {
     x & !(PG_SIZE as u64 - 1)
+}
+
+fn pgroundup(x: u64) -> u64 {
+    (x + PG_SIZE as u64 - 1) & !(PG_SIZE as u64 - 1)
+}
+
+pub fn uvm_alloc(
+    pgdir: *mut PageTable,
+    allocator: &mut Allocator,
+    old_sz: usize,
+    new_sz: usize,
+) -> Option<usize> {
+    if new_sz < old_sz {
+        return Some(old_sz);
+    }
+    let mut a = pgroundup(old_sz as u64);
+    while a < new_sz as u64 {
+        let mem = allocator.kalloc();
+        if mem.is_null() {
+            uvm_dealloc(pgdir, allocator, a as usize, old_sz);
+            return None;
+        }
+        unsafe {
+            core::ptr::write_bytes(mem, 0, PG_SIZE);
+        }
+        if !map_pages(
+            pgdir,
+            allocator,
+            a,
+            v2p(mem as usize) as u64,
+            PG_SIZE as u64,
+            PageTableEntry::WRITABLE | PageTableEntry::USER,
+        ) {
+            allocator.kfree(mem as usize);
+            uvm_dealloc(pgdir, allocator, a as usize, old_sz);
+            return None;
+        }
+        a += PG_SIZE as u64;
+    }
+    Some(new_sz)
+}
+
+pub fn uvm_dealloc(
+    pgdir: *mut PageTable,
+    allocator: &mut Allocator,
+    old_sz: usize,
+    new_sz: usize,
+) -> usize {
+    if new_sz >= old_sz {
+        return old_sz;
+    }
+
+    let mut a = pgroundup(new_sz as u64);
+    let old = pgroundup(old_sz as u64);
+    while a < old {
+        let pte = walk(pgdir, allocator, a, false, 0);
+        if let Some(pte) = pte {
+            if pte.is_present() {
+                let pa = pte.addr();
+                if pa != 0 {
+                    allocator.kfree(p2v(pa as usize));
+                }
+                unsafe { *pte = PageTableEntry::new(0, 0) };
+            }
+        }
+        a += PG_SIZE as u64;
+    }
+    new_sz
 }
