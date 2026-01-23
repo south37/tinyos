@@ -310,8 +310,7 @@ fn do_block_io(sector: u64, buf: &mut [u8], write: bool) {
 
         // Use yield to avoid lost wakeup race conditions
         if crate::proc::mycpu().process.is_some() {
-            drop(guard);
-            crate::proc::yield_proc();
+            crate::proc::sleep(addr_of!(VIRTIO_BLK_DRIVER) as usize, Some(guard));
             guard = VIRTIO_BLK_DRIVER.lock();
         } else {
             drop(guard);
