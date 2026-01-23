@@ -24,42 +24,26 @@ impl Pipe {
 
 pub static PIPE_ALLOCATOR: Spinlock<()> = Spinlock::new((), "PIPE_ALLOCATOR");
 
-pub fn pipealloc(_f0: &mut crate::file::File, _f1: &mut crate::file::File) -> Result<(), ()> {
-    // Ideally we use a slab allocator or heap for Pipe.
-    // For now, let's use global heap allocator since we have `allocator::kalloc`?
-    // But `kalloc` returns a page. Pipe is small.
-    // We can use `Box::new(Pipe::new())` if we had `alloc` crate in kernel.
-    // We don't have `alloc` crate in kernel yet? We do have `kalloc`.
-    // Let's manually manage a page for now or just allocate a page for each pipe?
-    // A page is 4KB. A pipe is small. It's wasteful but simple.
-    // Or we can define a static array of pipes like files.
-    // Let's use `allocator::kalloc` to get a page and cast it to Pipe.
-
+pub fn pipealloc(f0: &mut crate::file::File, f1: &mut crate::file::File) -> Result<(), ()> {
     let mut allocator = crate::allocator::ALLOCATOR.lock();
     let p_ptr = allocator.kalloc();
     if p_ptr.is_null() {
         return Err(());
     }
 
-    let p = unsafe { &mut *(p_ptr as *mut Pipe) };
-    *p = Pipe::new();
+    unsafe {
+        *(p_ptr as *mut Spinlock<PipeData>) = Spinlock::new(PipeData::new(), "pipe");
+    }
 
-    // In xv6, pipe has a lock. We can wrap Pipe in Spinlock or use `p.lock`.
-    // Let's assume Pipe structure *is* the shared data.
-    // We need a lock to protect it.
-    // So the allocated memory should probably be `Spinlock<Pipe>`.
+    f0.f_type = crate::file::FileType::Pipe;
+    f0.readable = true;
+    f0.writable = false;
+    f0.pipe = Some(p_ptr as *mut Spinlock<PipeData>);
 
-    // Let's change strategy: File struct points to *mut Pipe.
-    // Accessing pipe requires locking.
-    // If we put Spinlock inside Pipe, we can just point to Pipe.
-
-    // Wait, `kalloc` gives raw memory.
-    // Let's construct `Spinlock<Pipe>` there.
-
-    // Actually, to keep it simple and safe(er), let's define `Pipe` to include the lock?
-    // Or just put `Spinlock` in `Pipe`.
-
-    // Let's rewrite `Pipe` to be `Spinlock<PipeData>`.
+    f1.f_type = crate::file::FileType::Pipe;
+    f1.readable = false;
+    f1.writable = true;
+    f1.pipe = Some(p_ptr as *mut Spinlock<PipeData>);
 
     Ok(())
 }
@@ -117,19 +101,23 @@ pub fn pipewrite(pi: *mut Spinlock<PipeData>, addr: u64, mut n: usize) -> isize 
         return -1;
     }
 
+    crate::debug!("pipewrite: entry pi={:?} n={}", pi, n);
     let mut p = unsafe { (*pi).lock() };
     let mut written = 0;
     let pgdir = unsafe { (*crate::proc::mycpu().process.unwrap()).pgdir };
 
     while n > 0 {
         if !p.readopen {
+            crate::debug!("pipewrite: read closed");
             return -1; // memory leak? user process problem
         }
 
         if p.nwrite == p.nread + PIPESIZE {
             // Full
+            crate::debug!("pipewrite: full, sleeping");
             crate::proc::wakeup(pi as usize + 1); // Wakeup readers
             crate::proc::sleep(pi as usize + 1, Some(p)); // Sleep on nwrite/nread change
+            crate::debug!("pipewrite: woke up");
             p = unsafe { (*pi).lock() }; // Reacquire
         } else {
             // Write chunk
@@ -157,6 +145,7 @@ pub fn pipewrite(pi: *mut Spinlock<PipeData>, addr: u64, mut n: usize) -> isize 
         }
     }
     crate::proc::wakeup(pi as usize + 1);
+    crate::debug!("pipewrite: exit written={}", written);
     written as isize
 }
 
@@ -165,16 +154,19 @@ pub fn piperead(pi: *mut Spinlock<PipeData>, addr: u64, mut n: usize) -> isize {
         return -1;
     }
 
+    crate::debug!("piperead: entry pi={:?} n={}", pi, n);
     let mut p = unsafe { (*pi).lock() };
     let pgdir = unsafe { (*crate::proc::mycpu().process.unwrap()).pgdir };
 
     while p.nread == p.nwrite && p.writeopen {
+        crate::debug!("piperead: empty, sleeping");
         let process_ptr = crate::proc::mycpu().process.unwrap() as *const crate::proc::Process;
         // Convert *const Process to &Process unsafe
         if unsafe { crate::proc::killed(&*process_ptr) } {
             return -1;
         }
         crate::proc::sleep(pi as usize + 1, Some(p));
+        crate::debug!("piperead: woke up");
         p = unsafe { (*pi).lock() };
     }
 
@@ -205,5 +197,6 @@ pub fn piperead(pi: *mut Spinlock<PipeData>, addr: u64, mut n: usize) -> isize {
     }
 
     crate::proc::wakeup(pi as usize + 1);
+    crate::debug!("piperead: exit read={}", read);
     read as isize
 }

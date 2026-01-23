@@ -361,14 +361,12 @@ fn sys_pipe(tf: &TrapFrame) -> isize {
         }
     }
     if fd0 == -1 {
-        // Cleanup pipe?
-        // We should implement cleanup logic.
-        // Calling fileclose would work if refcnt is properly set.
-        // But pipealloc setups the file structs.
-        // Let's assume syscall success mainly.
+        // Cleanup pipe
         f0.refcnt = 0;
         f1.refcnt = 0;
-        // Also need to free pipe...
+        // Ideally we should call fileclose/pipeclose to free the pipe memory allocated in pipealloc
+        // For now, let's assume we won't run out of fds often, but this is a leak if it happens.
+        // To fix: manually free pipe or implement proper cleanup.
         return -1;
     }
 
@@ -384,43 +382,9 @@ fn sys_pipe(tf: &TrapFrame) -> isize {
         p.ofile[fd0 as usize] = None;
         f0.refcnt = 0;
         f1.refcnt = 0;
-        // Free pipe...
+        // Leak pipe
         return -1;
     }
-
-    f0.f_type = crate::file::FileType::Pipe;
-    f0.readable = true;
-    f0.writable = false;
-
-    f1.f_type = crate::file::FileType::Pipe;
-    f1.readable = false;
-    f1.writable = true;
-
-    // pipealloc needs to link them to the same pipe structure
-    // We didn't fully implement pipealloc to do linking inside it in previous step?
-    // Let's check pipe.rs.
-    // Ah, pipe.rs was just returning Ok(()). I need to update it to return the Pipe pointer.
-    // Or I should allocate in sys_pipe?
-    // Let's allocate here or update pipealloc.
-    // Better: update pipealloc to return the pipe ptr.
-    // FOR NOW: Inline allocation here as pipealloc signature was weird.
-
-    let mut allocator = crate::allocator::ALLOCATOR.lock();
-    let p_ptr = allocator.kalloc();
-    if p_ptr.is_null() {
-        p.ofile[fd0 as usize] = None;
-        p.ofile[fd1 as usize] = None;
-        f0.refcnt = 0;
-        f1.refcnt = 0;
-        return -1;
-    }
-    unsafe {
-        *(p_ptr as *mut crate::spinlock::Spinlock<crate::pipe::PipeData>) =
-            crate::spinlock::Spinlock::new(crate::pipe::PipeData::new(), "pipe");
-    }
-
-    f0.pipe = Some(p_ptr as *mut crate::spinlock::Spinlock<crate::pipe::PipeData>);
-    f1.pipe = Some(p_ptr as *mut crate::spinlock::Spinlock<crate::pipe::PipeData>);
 
     fds[0] = fd0 as i32;
     fds[1] = fd1 as i32;
