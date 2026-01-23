@@ -361,9 +361,9 @@ pub fn scheduler() {
         unsafe { core::arch::asm!("sti") };
 
         // Acquire PTABLE LOCK
-        crate::debug!("DEBUG: sched acquiring lock");
+        // rate::debug!("DEBUG: sched acquiring lock");
         let guard = PROCS_LOCK.lock();
-        crate::debug!("DEBUG: sched lock acquired");
+        // crate::debug!("DEBUG: sched lock acquired");
 
         let mut ran_process = false;
         unsafe {
